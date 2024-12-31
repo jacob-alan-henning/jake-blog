@@ -1,0 +1,104 @@
+body {
+    background-color: #333;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh; 
+}
+
+.container {
+    width: 90%;
+    margin: auto;
+    overflow: hidden;
+    flex: 1; 
+}
+
+header, footer {
+    background: #222;
+    color: #ddd;
+    padding: 20px 0;
+    text-align: center;
+}
+
+.about, .latest-posts {
+    padding: 20px 0;
+}
+
+h1, h2 {
+    color: #76ff03;
+}
+
+p {
+    margin: 20px 0;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+ul li {
+    margin: 10px 0;
+}
+
+ul li a {
+    color: #ff0000; 
+    text-decoration: none; 
+}
+
+ul li a {
+    color: #ff0000; 
+    text-decoration: underline; 
+}
+
+footer {
+    font-size: 0.8em;
+    margin-top: auto; /* Pushes the footer to the bottom */
+}
+
+.tabs {
+    margin: 20px 0;
+    border-bottom: 1px solid #0f500f;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.tab-button {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    margin-right: 10px;
+    border-bottom: 2px solid transparent;
+    font-family: 'Courier New', Courier, monospace !important; 
+    color: #fff; 
+}
+
+.tab-button.active {
+    border-bottom: 2px solid #007bff;
+    color: #007bff;
+    font-family: 'Courier New', Courier, monospace !important; 
+}
+
+.tab-content {
+    display: none;
+    padding: 20px 0;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.json-display {
+    background: #1e1e1e;
+    color: #d4d4d4;
+}
+
+.json-viewer {
+    white-space: pre;
+    margin: 0;
+    line-height: 1.5;
+}
