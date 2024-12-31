@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  jake-blog:
+    image: jake-blog
+    ports:
+      - "80:8080"
+    networks:
+      - monitoring-network
+    env_file:
+      - local.env
+
+networks:
+  monitoring-network:
+    driver: bridge

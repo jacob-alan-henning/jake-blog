@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jacob Henning's Blog</title>
+    <script src="/htmx.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="static/styles.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>Welcome to the Personal Blog of Jacob Henning</h1>
+        <p>I work with computers.</p>
+    </div>
+</header>
+
+<div class="container">
+
+    <nav class="tabs">
+        <a href="#blog" class="tab-button active" data-tab="tab1">Blog</a>
+        <a href="#telemetry" class="tab-button" data-tab="tab2">Telemetry</a>
+        <a href="#about" class="tab-button" data-tab="tab3">About</a>
+    </nav>
+
+    <div id="tab1" class="tab-content active">
+        <h2>Latest Blog Posts</h2>
+        <ul hx-get="/content" hx-trigger="load" hx-swap="innerHTML">
+            <li>Loading...</li>
+        </ul>        
+    </div>
+
+    <div id="tab2" class="tab-content">
+        <h2>Metrics</h2>
+        <ul hx-get="/telemetry/metric" hx-trigger="load, every 60s" hx-swap="innerHTML">
+            <li>Loading...</li>
+        </ul>  
+
+        <h2>Tracing</h2>
+        <p>Last trace processed by the blog</p>
+        <div class="json-display">
+            <pre hx-get="/telemetry/trace" 
+                 hx-swap="innerHTML" 
+                 hx-trigger="load" 
+                 class="json-viewer">Waiting for traces...</pre>
+        </div>
+    </div>
+
+    <div id="tab3" class="tab-content">
+        <h2>About Me</h2>
+        <p>Interested in all things SRE/Devops/Infra/Cloud</p>
+        <p>Fishing on the weekends</p>
+        <p>Greater Boston</p>
+    </div>
+
+</div>
+
+<footer>
+    <div class="container">
+        Contact: jacobalanhenning@gmail.com 
+    </div>
+</footer>
+
+
+<script>
+    function setupTabs() {
+    // Handle click events on tab links
+        document.querySelectorAll('.tab-button').forEach(link => {
+            link.addEventListener('click', function(e) {
+                // Only handle direct clicks, let the browser handle ctrl+click, right-click, etc
+                if (e.button === 0 && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+                    e.preventDefault();
+                    const tabId = this.dataset.tab;
+                    switchTab(tabId);
+                }
+            });
+        });
+    }
+
+
+    function switchTab(tabId, updateHash = true) {
+    // Remove active class from all tabs and buttons
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+    });
+    
+    // Add active class to selected tab and its button
+    document.getElementById(tabId).classList.add('active');
+    document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+    
+    // Update URL hash if needed
+    if (updateHash) {
+        const hashMap = {
+            'tab1': 'blog',
+            'tab2': 'telemetry',
+            'tab3': 'about'
+        };
+        window.location.hash = hashMap[tabId];
+    }
+}
+
+    // Add function to handle hash changes
+    function handleHash() {
+        const hash = window.location.hash.slice(1) || 'blog'; // Remove # and default to 'blog'
+        const tabMap = {
+            'blog': 'tab1',
+            'telemetry': 'tab2',
+            'about': 'tab3'
+        };
+        const tabId = tabMap[hash] || 'tab1'; // Default to tab1 if invalid hash
+        switchTab(tabId, false); // Don't update hash since we're responding to a hash change
+    }
+
+    // Initialize and set up event listeners
+    window.addEventListener('hashchange', handleHash);
+    window.addEventListener('load', handleHash);
+    document.addEventListener('DOMContentLoaded', setupTabs);
+</script>
+</body>
+</html>
