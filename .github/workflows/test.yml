@@ -25,6 +25,7 @@ jobs:
       run: gofmt -l ./
 
     - name: govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
       run: govulncheck -show verbose ./internal/blog
 
     - name: gosec
