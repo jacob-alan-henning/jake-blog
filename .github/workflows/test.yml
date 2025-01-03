@@ -1,11 +1,25 @@
-name: test jake-blog
-run-name: ${{ github.actor }} is testing jake-blog
-on: [push]
-jobs:
-  lint:
-    runs-on: golang:1.23
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v4
-      - run: gofmt -l ./
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
 
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        
+    - name: Test
+      run: go test ./integration_test 
