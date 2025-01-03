@@ -151,6 +151,7 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 		w.Header().Set("Content-Security-Policy", `
             default-src 'self';
             script-src 'self';
+			script-src-elem 'self';
             style-src 'self';
             img-src 'self';
             connect-src 'self';
@@ -233,7 +234,10 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(prettyJSON.Bytes())
+	_, err = w.Write(prettyJSON.Bytes())
+	if err != nil {
+		log.Print("failed to write trace data")
+	}
 }
 
 func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {

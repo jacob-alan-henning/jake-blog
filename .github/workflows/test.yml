@@ -1,0 +1,11 @@
+name: test jake-blog
+run-name: ${{ github.actor }} is testing jake-blog
+on: [push]
+jobs:
+  lint:
+    runs-on: golang:1.23
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - run: gofmt -l ./
+

@@ -19,45 +19,54 @@ func getFileLastModified(cfg *Config, filePath string) (time.Time, error) {
 
 	repo, err := git.PlainOpen(cfg.ContentDir)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("failed to open git repo: %w", err)
 	}
 
 	ref, err := repo.Head()
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("failed to get repo HEAD: %w", err)
 	}
 
 	// Get commit history
 	cIter, err := repo.Log(&git.LogOptions{From: ref.Hash()})
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("failed to get commit history: %w", err)
 	}
 
 	var latestCommitDate time.Time
 	err = cIter.ForEach(func(c *object.Commit) error {
+		if c == nil {
+			return fmt.Errorf("encountered nil commit")
+		}
+
 		// Get the files changed in this commit
 		files, err := c.Files()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get files for commit %s: %w", c.Hash, err)
 		}
 
 		// Check if our target file was changed
-		files.ForEach(func(f *object.File) error {
+		if err := files.ForEach(func(f *object.File) error {
+			if f == nil {
+				return fmt.Errorf("encountered nil file")
+			}
 			if f.Name == filePath {
 				latestCommitDate = c.Author.When
 			}
 			return nil
-		})
+		}); err != nil {
+			return fmt.Errorf("failed to iterate files in commit %s: %w", c.Hash, err)
+		}
 
 		return nil
 	})
 
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("failed to iterate commits: %w", err)
 	}
 
 	if latestCommitDate.IsZero() {
-		return time.Time{}, fmt.Errorf("file not found in git history")
+		return time.Time{}, fmt.Errorf("file %s not found in git history", filePath)
 	}
 
 	return latestCommitDate, nil

@@ -80,7 +80,7 @@ func (bm *BlogManager) TriggerUpdate() {
 }
 
 func (bm *BlogManager) extractTitle(filepath string) string {
-	content, err := os.ReadFile(filepath)
+	content, err := os.ReadFile(filepath) // #nosec G304 -- file is from trusted source
 	if err != nil {
 		return strings.TrimSuffix(path.Base(filepath), ".md")
 	}

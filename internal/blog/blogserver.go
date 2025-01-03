@@ -72,14 +72,20 @@ func NewBlogServer(opts ...BlogServerOption) (*BlogServer, error) {
 func (bs *BlogServer) Start() error {
 	signal.Notify(bs.sigChan, syscall.SIGINT, syscall.SIGTERM)
 	// start localtemetrystorage
-	bs.telem.Start(bs.ctx)
-	bs.InstallExportPipeline(bs.ctx)
+	err := bs.telem.Start(bs.ctx)
+	if err != nil {
+		bs.errChan <- err
+	}
+	err = bs.InstallExportPipeline(bs.ctx)
+	if err != nil {
+		bs.errChan <- err
+	}
 
 	// Start blog manager updates
 	bs.bm.ListenForUpdates(bs.ctx)
 	bs.bm.TriggerUpdate()
 
-	err := bs.server.Start(bs.ctx)
+	err = bs.server.Start(bs.ctx)
 	if err != nil {
 		bs.errChan <- err
 	}
