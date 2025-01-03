@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 	"time"
 
@@ -113,8 +115,14 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	))
 
 	// Content handlers
-	mux.HandleFunc("/content/", s.ArticleList)
-	mux.HandleFunc("/article/", s.Article)
+	mux.Handle("/content/", s.wrapHandler(
+		http.HandlerFunc(s.ArticleList),
+		"article list",
+	))
+	mux.Handle("/article/", s.wrapHandler(
+		http.HandlerFunc(s.Article),
+		"article handler",
+	))
 	mux.HandleFunc("/telemetry/trace", s.LastTrace)
 	mux.HandleFunc("/telemetry/metric", s.MetricSnippet)
 
@@ -122,7 +130,37 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 }
 
 func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
-	return otelhttp.NewHandler(h, name,
+	// validates and add security headers
+	validateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(r.URL.Path) > 1024 {
+			http.Error(w, "URI too long", http.StatusBadRequest)
+			return
+		}
+
+		if strings.ContainsRune(r.URL.Path, 0xfffd) { // inavlid utf-8 characters
+			http.Error(w, "Invalid URL characters", http.StatusBadRequest)
+			return
+		}
+
+		if strings.Contains(r.URL.Path, "%00") || strings.Contains(r.URL.Path, "\x00") { // null termination
+			http.Error(w, "Invalid URL characters", http.StatusBadRequest)
+			return
+		}
+
+		// add csp headers
+		w.Header().Set("Content-Security-Policy", `
+            default-src 'self';
+            script-src 'self';
+            style-src 'self';
+            img-src 'self';
+            connect-src 'self';
+        `)
+
+		h.ServeHTTP(w, r)
+	})
+
+	// wrap the validation handler with OTEL
+	return otelhttp.NewHandler(validateHandler, name,
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			return fmt.Sprintf("Serve %s", r.URL.Path)
 		}),
@@ -157,7 +195,15 @@ func (s *Server) Article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	articleName := path.Base(r.URL.Path)
+	// strip special characters
+	unescaped, err := url.QueryUnescape(r.URL.Path)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "invalid url encoding"))
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	articleName := path.Base(unescaped)
 	span.SetAttributes(attribute.String("article.name", articleName))
 
 	article, exists := s.bm.GetArticle(articleName)

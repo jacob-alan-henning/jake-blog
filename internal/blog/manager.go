@@ -128,7 +128,7 @@ func (bm *BlogManager) updateContent() error {
 		fileName := strings.TrimSuffix(filepath.Base(file), ".md")
 		headerTitle := bm.extractTitle(file)
 
-		lastModified, err := getFileLastModified(bm.Config.ContentDir, filepath.Base(file))
+		lastModified, err := getFileLastModified(bm.Config, filepath.Base(file))
 		if err != nil {
 			log.Printf("Error processing last modified date for %s: %v", fileName, err)
 			continue

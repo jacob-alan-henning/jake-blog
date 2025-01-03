@@ -90,7 +90,7 @@ func (bs *BlogServer) InstallExportPipeline(ctx context.Context) error {
 		metric.WithResource(res),
 		metric.WithReader(metric.NewPeriodicReader(
 			metricsExporter,
-			metric.WithInterval(time.Second*10),
+			metric.WithInterval(time.Second*1),
 		)),
 	)
 

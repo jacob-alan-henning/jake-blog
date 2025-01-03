@@ -15,6 +15,7 @@ type Config struct {
 	RepoKeyPriv string // RepoKeyPriv is the private key content for Git repository access
 	KeyPrivPath string // KeyPrivPath is the file path where the private key will be stored
 	RepoPass    string // RepoPass is the optional password for the private key
+	LocalOnly   bool   // LocalyOnly = true specifies that the server won't clone a git repo but rely on md files in ContentDir
 }
 
 func DefaultConfig() *Config {
@@ -22,6 +23,7 @@ func DefaultConfig() *Config {
 		ServerPort:  "8080",
 		ContentDir:  "content",
 		KeyPrivPath: filepath.Join(os.TempDir(), "blog-repo-key"),
+		LocalOnly:   false,
 	}
 }
 
@@ -74,9 +76,23 @@ func WithEnvironment(prefix string) ConfigOption {
 			"REPO_PASS":          &c.RepoPass,
 		}
 
+		envFlags := map[string]*bool{
+			"LOCAL_ONLY": &c.LocalOnly,
+		}
+
 		for env, ptr := range envVars {
 			if value := os.Getenv(prefix + env); value != "" {
 				*ptr = value
+			}
+		}
+
+		for env, ptr := range envFlags {
+			if value := os.Getenv(prefix + env); value != "" {
+				if value == "true" {
+					*ptr = true
+				} else {
+					*ptr = false
+				}
 			}
 		}
 

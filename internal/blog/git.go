@@ -1,7 +1,6 @@
 package blog
 
 import (
-	//	"context"
 	"fmt"
 	"log"
 	"os"
@@ -11,13 +10,14 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	// "go.opentelemetry.io/otel/attribute"
-	// "go.opentelemetry.io/otel/codes"
-	// "go.opentelemetry.io/otel/trace"
 )
 
-func getFileLastModified(repoPath string, filePath string) (time.Time, error) {
-	repo, err := git.PlainOpen(repoPath)
+func getFileLastModified(cfg *Config, filePath string) (time.Time, error) {
+	if cfg.LocalOnly {
+		return time.Now(), nil
+	}
+
+	repo, err := git.PlainOpen(cfg.ContentDir)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -64,12 +64,15 @@ func getFileLastModified(repoPath string, filePath string) (time.Time, error) {
 }
 
 func FetchMarkdownRepo(cfg *Config) error {
-	//_, span := tracer.Start(ctx, "pull md repo")
-	//defer span.End()
+	if cfg.LocalOnly {
+		log.Printf("LocalOnly == true no repo cloned")
+		return nil
+	}
+
 	sshAuth, err := ssh.NewPublicKeysFromFile("git", cfg.KeyPrivPath, cfg.RepoPass)
 	if err != nil {
 		fmt.Fprintf(os.Stdout, "Error loading SSH keys: %v\n", err)
-		//span.SetStatus(codes.Error, err.Error())
+
 		return err
 	}
 
@@ -81,19 +84,14 @@ func FetchMarkdownRepo(cfg *Config) error {
 	if err != nil {
 		if err == git.ErrRepositoryAlreadyExists {
 			log.Println("Repo already exists, opening and pulling latest changes")
-			//span.SetAttributes(
-			//	attribute.Bool("repo.exists", true),
-			//)
 
 			repo, err := git.PlainOpen(cfg.ContentDir)
 			if err != nil {
-				//span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
 			worktree, err := repo.Worktree()
 			if err != nil {
-				//span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 			err = worktree.Pull(&git.PullOptions{
@@ -102,17 +100,14 @@ func FetchMarkdownRepo(cfg *Config) error {
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
 				log.Printf("Failed to pull repo: %v", err)
-				//span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
 		} else {
 			log.Printf("Error cloning repository: %v", err)
-			//span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
 	log.Printf("Repository cloned successfully: %v\n", repo)
-	//span.AddEvent("pulled md repo")
 	return nil
 }
