@@ -20,7 +20,6 @@ type BlogServer struct {
 	ctx     context.Context
 	cancel  context.CancelFunc
 	sigChan chan os.Signal
-	errChan chan error
 }
 
 type BlogServerOption func(*BlogServer) error
@@ -48,7 +47,6 @@ func NewBlogServer(opts ...BlogServerOption) (*BlogServer, error) {
 		ctx:     ctx,
 		cancel:  cancel,
 		sigChan: make(chan os.Signal, 1),
-		errChan: make(chan error, 1),
 		telem:   lts,
 	}
 
@@ -74,11 +72,11 @@ func (bs *BlogServer) Start() error {
 	// start localtemetrystorage
 	err := bs.telem.Start(bs.ctx)
 	if err != nil {
-		bs.errChan <- err
+		return fmt.Errorf("failed to start telemetry: %w", err)
 	}
 	err = bs.InstallExportPipeline(bs.ctx)
 	if err != nil {
-		bs.errChan <- err
+		return fmt.Errorf("failed to install export pipeline: %w", err)
 	}
 
 	// Start blog manager updates
@@ -87,7 +85,7 @@ func (bs *BlogServer) Start() error {
 
 	err = bs.server.Start(bs.ctx)
 	if err != nil {
-		bs.errChan <- err
+		return fmt.Errorf("failed to start server: %w", err)
 	}
 
 	return bs.run()
@@ -97,25 +95,18 @@ func (bs *BlogServer) run() error {
 	select {
 	case sig := <-bs.sigChan:
 		log.Printf("Received signal %s, initiating shutdown...", sig)
-	case err := <-bs.errChan:
-		log.Printf("Received error: %v, initiating shutdown...", err)
-		//return err
 	}
 
 	return bs.shutdown()
 }
 
 func (bs *BlogServer) shutdown() error {
-	// Wait for clean shutdown or timeout
 	bs.cancel()
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	select {
-	case <-shutdownCtx.Done():
-		return fmt.Errorf("shutdown timed out")
-	case err := <-bs.errChan:
-		return fmt.Errorf("error during shutdown: %w", err)
-	}
+	<-ctx.Done()
+
+	return nil
 }

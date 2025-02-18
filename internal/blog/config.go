@@ -1,6 +1,7 @@
 package blog
 
 import (
+	"crypto/tls"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +17,9 @@ type Config struct {
 	KeyPrivPath string // KeyPrivPath is the file path where the private key will be stored
 	RepoPass    string // RepoPass is the optional password for the private key
 	LocalOnly   bool   // LocalyOnly = true specifies that the server won't clone a git repo but rely on md files in ContentDir
+	HTTPSOn     bool   // HTTPSON = true specifies that https is enabled for the web server. http will be redirected
+	HTTPSCRT    string // HTTPSCRT is the location of the https certificate
+	HTTPSKey    string // HTTPSKEY is the location of the key associated with your certifacte
 }
 
 func DefaultConfig() *Config {
@@ -24,6 +28,7 @@ func DefaultConfig() *Config {
 		ContentDir:  "content",
 		KeyPrivPath: filepath.Join(os.TempDir(), "blog-repo-key"),
 		LocalOnly:   false,
+		HTTPSOn:     false,
 	}
 }
 
@@ -61,6 +66,20 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("KeyPrivPath must be set when RepoKeyPriv is provided")
 	}
 
+	if c.HTTPSOn {
+		if c.HTTPSCRT == "" {
+			return fmt.Errorf("https cert must be specified when https is enabled")
+		}
+		if c.HTTPSKey == "" {
+			return fmt.Errorf("https key must be specified when https is enabled")
+		}
+		// check that tls cert/key pair are valid
+		_, err := tls.LoadX509KeyPair(c.HTTPSCRT, c.HTTPSKey)
+		if err != nil {
+			return fmt.Errorf("failed to load tls certificate: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -74,10 +93,13 @@ func WithEnvironment(prefix string) ConfigOption {
 			"REPO_PRIV_KEY":      &c.RepoKeyPriv,
 			"REPO_PRIV_KEY_PATH": &c.KeyPrivPath,
 			"REPO_PASS":          &c.RepoPass,
+			"HTTPSCRT":           &c.HTTPSCRT,
+			"HTTPSKEY":           &c.HTTPSKey,
 		}
 
 		envFlags := map[string]*bool{
 			"LOCAL_ONLY": &c.LocalOnly,
+			"HTTPS_ON":   &c.HTTPSOn,
 		}
 
 		for env, ptr := range envVars {

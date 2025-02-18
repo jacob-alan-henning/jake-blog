@@ -1,3 +1,7 @@
 .DS_Store
-
 *.env
+*.hcl
+*.tfplan
+*.secrets
+deployments/terraform/.terraform
+deployments/local/local-certs

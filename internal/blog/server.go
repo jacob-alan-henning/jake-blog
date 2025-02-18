@@ -64,14 +64,42 @@ func (s *Server) Start(ctx context.Context) error {
 		ReadTimeout:  15 * time.Second,
 	}
 
+	log.Printf("HTTPS_ENABLED: %t", s.bm.Config.HTTPSOn)
+
 	signal.Notify(s.sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	go func() {
-		log.Printf("Starting server on port %s", s.bm.Config.ServerPort)
-		if err := s.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.errChan <- fmt.Errorf("server error: %w", err)
-		}
-	}()
+	log.Printf("Starting server on port %s", s.bm.Config.ServerPort)
+
+	if s.bm.Config.HTTPSOn {
+		go func() {
+			err := s.srv.ListenAndServeTLS(s.bm.Config.HTTPSCRT, s.bm.Config.HTTPSKey)
+			if err != nil {
+				s.errChan <- fmt.Errorf("server error: %w", err)
+			}
+		}()
+		// open http server to redirect to https
+		go func() {
+			redirectSrv := &http.Server{
+				Addr:         ":80",
+				Handler:      http.HandlerFunc(s.RedirectHandler),
+				WriteTimeout: 15 * time.Second,
+				ReadTimeout:  15 * time.Second,
+			}
+
+			err := redirectSrv.ListenAndServe()
+			if err != nil {
+				s.errChan <- fmt.Errorf("redirect server error: %w", err)
+			}
+		}()
+
+	} else {
+		go func() {
+			err := s.srv.ListenAndServe()
+			if err != nil {
+				s.errChan <- fmt.Errorf("server error: %w", err)
+			}
+		}()
+	}
 
 	// Wait for shutdown signal
 	select {
@@ -148,14 +176,7 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 		}
 
 		// add csp headers
-		w.Header().Set("Content-Security-Policy", `
-            default-src 'self';
-            script-src 'self';
-			script-src-elem 'self';
-            style-src 'self';
-            img-src 'self';
-            connect-src 'self';
-        `)
+		w.Header().Set("Content-Security-Policy", `default-src 'self'; script-src 'self'; script-src-elem 'self'; style-src 'self'; img-src 'self'; connect-src 'self'`)
 
 		h.ServeHTTP(w, r)
 	})
@@ -184,6 +205,15 @@ func (s *Server) ArticleList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, s.bm.HtmlList)
+}
+
+func (s *Server) RedirectHandler(w http.ResponseWriter, r *http.Request) {
+	target := "https://" + r.Host + r.URL.Path
+
+	if len(r.URL.RawQuery) > 0 {
+		target += "?" + r.URL.RawQuery
+	}
+	http.Redirect(w, r, target, http.StatusPermanentRedirect)
 }
 
 func (s *Server) Article(w http.ResponseWriter, r *http.Request) {

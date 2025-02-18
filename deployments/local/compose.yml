@@ -4,11 +4,14 @@ services:
   jake-blog:
     image: jake-blog
     ports:
-      - "80:8080"
+      - "443:8080"
+      - "80:80"
     networks:
       - monitoring-network
     env_file:
-      - local.env
+      - locals.env
+    volumes:
+      - /Users/jake/local-certs:/tmp 
 
 networks:
   monitoring-network:

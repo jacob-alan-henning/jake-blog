@@ -1,0 +1,16 @@
+services:
+  jake-blog:
+    image: {{ registry | trim }}/{{ repository | trim }}:{{ image_tag | trim }}
+    ports:
+      - "443:8080"
+      - "80:80"
+    networks:
+      - monitoring-network
+    env_file:
+      - .env
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt 
+
+networks:
+  monitoring-network:
+    driver: bridge

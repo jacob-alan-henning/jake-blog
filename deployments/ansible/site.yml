@@ -1,0 +1,8 @@
+---
+- name: Configure blog server
+  hosts: blog
+  gather_facts: false
+  
+  roles:
+    - role: common
+      tags: ['common']

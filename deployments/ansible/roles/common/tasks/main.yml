@@ -1,0 +1,266 @@
+---
+- block:
+    - name: Get current public IP
+      ansible.builtin.uri:
+        url: https://api.ipify.org?format=json
+        return_content: yes
+      register: public_ip
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Ensure public IP was retrieved successfully
+      ansible.builtin.fail:
+        msg: "Failed to retrieve public IP"
+      when: public_ip.json is not defined or public_ip.json.ip is not defined
+      changed_when: false
+
+    - name: Open SSH port for current IP
+      ansible.builtin.command: >-
+        aws lightsail open-instance-public-ports
+        --instance-name {{ instance_name }}
+        --port-info fromPort=22,toPort=22,protocol=TCP,cidrs="{{ public_ip.json.ip }}/32"
+      delegate_to: localhost
+      environment: 
+        PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+      changed_when: false
+    
+    - name: Update and upgrade system packages to latest version
+      ansible.builtin.apt:
+        name: "*"
+        update_cache: true
+        state: latest
+      become: true
+
+    - name: Create the jakeblog user
+      ansible.builtin.user:
+        name: jakeblog
+        system: yes
+        shell: /usr/sbin/nologin
+        home: /opt/jakeblog
+      become: true
+
+    # setup vars we need for ecr,jakeblog,certbot
+    - name: Set application env vars
+      ansible.builtin.set_fact:
+        blog_repo_priv_key: "{{ lookup('env', 'BLOG_REPO_PRIV_KEY') }}"
+        image_tag: "{{ lookup('env', 'IMAGE_TAG') }}"
+        blog_repo_pass: "{{ lookup('env', 'BLOG_REPO_PASS') }}"
+        aws_region: "{{ lookup('env','AWS_REGION') }}"
+        aws_access_key_id: "{{ lookup('env','AWS_ACCESS_KEY_ID') }}"
+        aws_secret_access_key: "{{ lookup('env','AWS_SECRET_ACCESS_KEY') }}"
+        registry: " {{ lookup('env','REGISTRY') }} "
+        repository: "{{ lookup('env','REPOSITORY') }}"
+        dns_domain: "{{ lookup('env','DNS_DOMAIN') }}"
+      delegate_to: localhost
+
+    - name: Install deployment dependencies
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - gnupg
+          - busybox # need httpd for cerbot http challenge
+          - snapd # needed to install certbot
+        state: present
+      become: true
+
+    # setup certbot
+    - name: Ensure /etc/letsencrypt directory exists
+      ansible.builtin.file:
+        path: /etc/letsencrypt
+        state: directory
+        owner: jakeblog
+        group: jakeblog
+        mode: '0755'
+      become: true
+
+    - name: Install certbot
+      community.general.snap:
+        name: certbot
+        classic: true
+        state: present
+      become: true 
+
+    - name: Create temporary web root directory
+      ansible.builtin.file:
+        path: "/tmp/certbot-webroot"
+        state: directory
+        mode: "0755"
+      become: true
+
+    - name: Start HTTP-01 challenge serve 
+      ansible.builtin.command:
+        cmd: busybox httpd -f -p 80 -h /tmp/certbot-webroot
+      async: 60
+      poll: 0 
+      register: webserver_task
+      become: true
+
+    - name: Wait for challenge server 
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Obtain cert with HTTP-01 challenge
+      ansible.builtin.command:
+        cmd: >
+          certbot certonly --webroot -w /tmp/certbot-webroot 
+          --keep-until-expiring -d {{ dns_domain }}
+          --agree-tos -m jacobalanhenning@gmail.com -n 
+      register: certbot_result
+      changed_when: "'Congratulations!' in certbot_result.stdout"
+      become: true
+
+    - name: Kill challenge server 
+      ansible.builtin.command:
+        cmd: pkill -f "busybox httpd"
+      ignore_errors: true
+      become: true 
+
+    - name: Remove temp web root 
+      ansible.builtin.file: 
+        path: /tmp/certbot-webroot
+        state: absent 
+      become: true 
+ 
+    - name: Ensure keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      become: true
+    
+    - name: Download GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /tmp/docker.gpg
+        mode: '0644'
+        force: true
+      become: true
+
+    - name: Dearmour GPG key
+      ansible.builtin.command:
+        cmd: gpg --yes --dearmor -o /etc/apt/keyrings/docker.gpg /tmp/docker.gpg
+      become: true
+
+    - name: Remove temp GPG key
+      ansible.builtin.file:
+        path: /tmp/docker.gpg
+        state: absent
+      become: true
+
+    - name: Set GPG key perms
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+      become: true
+      
+    - name: Install docker repository and update apt cache   
+      ansible.builtin.apt_repository:
+        repo: deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+        filename: docker
+        update_cache: true
+      become: true
+
+    - name: Install docker and compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce 
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: latest
+        update_cache: true
+      become: true
+
+    - name: Enable docker service
+      ansible.builtin.systemd_service:
+        name: docker
+        daemon-reload: true
+        enabled: true
+        state: "started"
+      become: true
+
+     
+    - name: Ensure /opt/jakeblog directory exists
+      ansible.builtin.file:
+        path: /opt/jakeblog
+        state: directory
+        owner: jakeblog
+        group: jakeblog
+        mode: '0750'
+      become: true
+
+    - name: Add jakeblog user to the docker group
+      ansible.builtin.user:
+        name: jakeblog
+        groups: docker
+        append: true
+      become: true
+
+    - name: Copy docker compose file
+      ansible.builtin.template:
+        src: templates/compose.j2
+        dest: /opt/jakeblog/compose.yml
+        owner: jakeblog
+        group: jakeblog
+        mode: '0644'
+      become: true
+
+    - name: Create env file for compose
+      ansible.builtin.template:
+        src: templates/env.j2
+        dest: /opt/jakeblog/.env
+        owner: jakeblog
+        group: jakeblog
+        mode: '0600'
+      become: true
+
+    - name: Get ECR login token
+      ansible.builtin.command: aws ecr get-login-password --region {{ aws_region }}
+      register: ecr_token
+      delegate_to: localhost
+      changed_when: false 
+
+    - name: Login to ECR
+      community.docker.docker_login:
+        registry_url: "{{ registry |trim }}" 
+        username: AWS 
+        password: "{{ ecr_token.stdout | trim }}"
+        reauthorize: true
+        docker_host: "unix:///var/run/docker.sock"
+        config_path: "~/.docker/config.json"
+        debug: true
+      become: true
+
+    - name: Copy systemd unit file
+      ansible.builtin.copy:
+        src: files/jakeblog.service
+        dest: /etc/systemd/system/jakeblog.service
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Reload systemd 
+      ansible.builtin.systemd:
+        daemon_reload: yes
+      become: true
+
+    - name: Enable the JakeBlog service
+      ansible.builtin.systemd:
+        name: jakeblog.service
+        state: restarted
+        enabled: yes
+      become: true
+
+  always:
+    - name: Close SSH port
+      ansible.builtin.command: >-
+        aws lightsail close-instance-public-ports
+        --instance-name {{ instance_name }}
+        --port-info fromPort=22,toPort=22,protocol=TCP
+      delegate_to: localhost
+      changed_when: false
