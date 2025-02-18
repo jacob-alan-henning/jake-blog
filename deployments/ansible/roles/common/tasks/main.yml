@@ -65,6 +65,13 @@
         state: present
       become: true
 
+    - name: Disable jakeblog if running
+      ansible.builtin.systemd:
+        name: jakeblog.service
+        state: stopped
+      ignore_errors: true
+      become: true
+
     # setup certbot
     - name: Ensure /etc/letsencrypt directory exists
       ansible.builtin.file:

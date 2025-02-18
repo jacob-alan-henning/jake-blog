@@ -11,8 +11,9 @@ services:
     env_file:
       - locals.env
     volumes:
-      - /Users/jake/local-certs:/tmp 
+      - /Users/jake/local-certs:/etc/letsencrypt
+      - /Users/jake/blogs:/tmp/content
 
 networks:
   monitoring-network:
-    driver: bridge
+    driver: host
