@@ -27,6 +27,7 @@ type BlogManager struct {
 	Articles     map[string]Article
 	HtmlList     string // html snippet - list of articles
 	SiteMap      string
+	RSSFeed      string
 	Config       *Config
 	articleMutex sync.RWMutex
 	updateChan   chan struct{} // Single channel for all updates
@@ -45,6 +46,12 @@ func (bm *BlogManager) GetArticle(name string) (Article, bool) {
 	defer bm.articleMutex.RUnlock()
 	article, exists := bm.Articles[name]
 	return article, exists
+}
+
+func (bm *BlogManager) GetRssFeed() string {
+	bm.articleMutex.RLock()
+	defer bm.articleMutex.RUnlock()
+	return bm.RSSFeed
 }
 
 // start update handler and handle signals which force update
@@ -124,6 +131,17 @@ func (bm *BlogManager) updateContent() error {
         </html>
     `
 
+	var rssBuilder strings.Builder
+
+	rssBuilder.WriteString(`
+     <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+      <channel>
+        <title> Jacob Henning's Blog </title>
+        <link> https://jake-henning.com </link>
+        <description> The personal blog of Jacob Henning </description>
+        <atom:link href="https://jake-henning/feed" rel="self" type="application/rss+xml" />
+   `)
+
 	for _, file := range files {
 		fileName := strings.TrimSuffix(filepath.Base(file), ".md")
 		headerTitle := bm.extractTitle(file)
@@ -151,11 +169,31 @@ func (bm *BlogManager) updateContent() error {
 
 		links = append(links, fmt.Sprintf(`<li><a href="/article/%s" target="_blank" rel="noopener noreferrer">%s</a> -- <span class="date">%s</span> </li>`,
 			fileName, headerTitle, lastModified.Format("Jan 2, 2006")))
+
+		rssBuilder.WriteString(fmt.Sprintf(`
+      <item>
+        <title> %s </title>
+        <link> %s </link>
+        <pubDate> %s </pubDate>
+        <guid isPermaLink="true"> %s </guid>
+       </item>
+      `,
+			newArticles[fileName].Title,
+			fmt.Sprintf("https://jake-henning.com%s", newArticles[fileName].Url),
+			newArticles[fileName].Date.Format("Mon, 15:04:05 GMT"),
+			fmt.Sprintf("https://jake-henning.com%s", newArticles[fileName].Url),
+		))
 	}
+
+	rssBuilder.WriteString(`
+      </channel>
+    </rss>
+    `)
 
 	bm.articleMutex.Lock()
 	bm.Articles = newArticles
 	bm.HtmlList = strings.Join(links, "<br/>")
+	bm.RSSFeed = rssBuilder.String()
 	bm.articleMutex.Unlock()
 
 	log.Printf("Content updated successfully: loaded %d articles", len(newArticles))

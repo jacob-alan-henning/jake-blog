@@ -103,7 +103,7 @@ func (bs *BlogServer) run() error {
 func (bs *BlogServer) shutdown() error {
 	bs.cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	<-ctx.Done()

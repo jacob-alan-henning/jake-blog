@@ -61,6 +61,9 @@ footer {
 }
 
 .tabs {
+    display: flex;
+    flex-wrap: wrap; /* Allow tabs to wrap if needed */
+    justify-content: center; /* Center the tabs horizontally */
     margin: 20px 0;
     border-bottom: 1px solid #0f500f;
     font-family: 'Courier New', Courier, monospace;

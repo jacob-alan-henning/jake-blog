@@ -33,7 +33,7 @@
 
     <div id="tab2" class="tab-content">
         <h2>Metrics</h2>
-        <ul hx-get="/telemetry/metric" hx-trigger="load, every 60s" hx-swap="innerHTML">
+        <ul id="metrics-list" hx-get="/telemetry/metric" hx-trigger="load, every 10s" hx-swap="innerHTML">
             <li>Loading...</li>
         </ul>  
 

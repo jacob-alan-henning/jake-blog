@@ -242,7 +242,7 @@
         debug: true
       become: true
 
-    - name: Copy systemd unit file
+    - name: Copy jakeblog service file
       ansible.builtin.copy:
         src: files/jakeblog.service
         dest: /etc/systemd/system/jakeblog.service
@@ -251,16 +251,45 @@
         mode: '0644'
       become: true
 
-    - name: Reload systemd 
-      ansible.builtin.systemd:
-        daemon_reload: yes
+    - name: Copy jakeblog HTTP socket file
+      ansible.builtin.copy:
+        src: files/jakeblog.socket
+        dest: /etc/systemd/system/jakeblog.socket
+        owner: root
+        group: root
+        mode: '0644'
+      become: true
+
+    - name: Copy jakeblog HTTPS socket file
+      ansible.builtin.copy:
+        src: files/jakeblog-secure.socket
+        dest: /etc/systemd/system/jakeblog-secure.socket
+        owner: root
+        group: root
+        mode: '0644'
       become: true
 
     - name: Enable the JakeBlog service
       ansible.builtin.systemd:
-        name: jakeblog.service
-        state: restarted
-        enabled: yes
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - jakeblog.socket 
+        - jakeblog-secure.socket 
+        - jakeblog.service
+      become: true
+
+    - name: Disable services which consume to much memory for a nano_instance
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false 
+      loop:
+        - fwupd
+        - ModemManager
+        - udisks2
       become: true
 
   always:

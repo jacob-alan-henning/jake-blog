@@ -104,9 +104,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Wait for shutdown signal
 	select {
 	case <-ctx.Done():
-		log.Println("Context cancelled, shutting down server...")
+		log.Println("context cancelled, shutting down server...")
 	case sig := <-s.sigChan:
-		log.Printf("Received signal %s, shutting down server...", sig)
+		log.Printf("received signal %s, shutting down server...", sig)
 	case err := <-s.errChan:
 		return fmt.Errorf("server error before shutdown: %w", err)
 	}
@@ -123,14 +123,13 @@ func (s *Server) shutdown() error {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 
-	log.Println("Server shutdown complete")
+	log.Println("server shutdown complete")
 	return nil
 }
 
 func (s *Server) SetupRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Static file servers with OTEL wrapping
 	mux.Handle("/", s.wrapHandler(
 		http.FileServer(http.Dir("/web")),
 		"static file server",
@@ -151,6 +150,12 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 		http.HandlerFunc(s.Article),
 		"article handler",
 	))
+
+	mux.Handle("/feed/", s.wrapHandler(
+		http.HandlerFunc(s.RssFeedHandler),
+		"RSS Feed Handler",
+	))
+
 	mux.HandleFunc("/telemetry/trace", s.LastTrace)
 	mux.HandleFunc("/telemetry/metric", s.MetricSnippet)
 
@@ -158,10 +163,14 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 }
 
 func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
-	// validates and add security headers
 	validateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(r.URL.Path) > 1024 {
 			http.Error(w, "URI too long", http.StatusBadRequest)
+			return
+		}
+
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -181,7 +190,6 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 		h.ServeHTTP(w, r)
 	})
 
-	// wrap the validation handler with OTEL
 	return otelhttp.NewHandler(validateHandler, name,
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			return fmt.Sprintf("Serve %s", r.URL.Path)
@@ -193,12 +201,6 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 func (s *Server) ArticleList(w http.ResponseWriter, r *http.Request) {
 	_, span := s.tracer.Start(r.Context(), "ArticleListHandler.Process")
 	defer span.End()
-
-	if r.Method != http.MethodGet {
-		span.SetAttributes(attribute.String("error", "method not allowed"))
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	s.bm.articleMutex.RLock()
 	defer s.bm.articleMutex.RUnlock()
@@ -220,17 +222,10 @@ func (s *Server) Article(w http.ResponseWriter, r *http.Request) {
 	_, span := s.tracer.Start(r.Context(), "ArticleHandler.Process")
 	defer span.End()
 
-	if r.Method != http.MethodGet {
-		span.SetAttributes(attribute.String("error", "method not allowed"))
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// strip special characters
 	unescaped, err := url.QueryUnescape(r.URL.Path)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "invalid url encoding"))
-		http.Error(w, "invalid path", http.StatusBadRequest)
+		http.Error(w, "invalid url encoding", http.StatusBadRequest)
 		return
 	}
 
@@ -275,5 +270,17 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 
 	uptime := time.Since(s.startTime)
 	count := s.lts.GetArticlesServed()
+
+	buf := make([]byte, 0, 19)
+	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")
+	dtStr := string(buf)
+
 	fmt.Fprintf(w, "<p>Uptime: %s</p><p>Articles Served: %d</p>", uptime, count)
+	fmt.Fprintf(w, "<p>Last Updated: %s</p>", dtStr)
+}
+
+func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/rss+xml")
+	feedContent := s.bm.GetRssFeed()
+	fmt.Fprint(w, feedContent)
 }
