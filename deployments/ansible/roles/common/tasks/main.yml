@@ -72,6 +72,65 @@
       ignore_errors: true
       become: true
 
+    # setup swap - needed on nano_instance
+    - name: Check swap file
+      ansible.builtin.stat:
+        path: /swapfile
+      register: swap_file_check
+
+    - name: Check if swap is enabled 
+      ansible.builtin.shell: swapon --show | grep -q /swapfile
+      register: swap_enabed
+      changed_when: false 
+
+    - name: Make swap file 
+      ansible.builtin.command: dd if=/dev/zero of=/swapfile bs=1M count=5120
+      when: not swap_file_check.stat.exists
+
+    - name: Set swap file permissions
+      ansible.builtin.file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: '0600'
+      become: true
+
+    - name: Make swap file 
+      ansible.builtin.command: mkswap /swapfile 
+      when: not swap_file_check.stat.exists or swap_enabled.rc != 0
+      become: true
+
+    - name: Enable swap 
+      ansible.builtin.command: swapon /swapfile
+      when: swap_enabled_rc != 0
+      become: true
+
+    - name: Add swap entry to ftsab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab 
+        line: /swapfile none swap sw 0 0
+        state: present 
+      become: true 
+
+    - name: Set swappines
+      ansible.builtin.sysctl:
+        name: vm.swappiness 
+        value: '10'
+        state: present 
+        sysctl_set: true 
+        reload: true 
+      become: true
+
+    - name: Configure disk write behavior
+      ansible.builtin.sysctl:
+        name: vm.dirty_ratio 
+        value: '60'
+        state: present 
+        sysctl_set: true 
+        reload: true 
+      become: true
+      
+
     # setup certbot
     - name: Ensure /etc/letsencrypt directory exists
       ansible.builtin.file:
@@ -251,34 +310,12 @@
         mode: '0644'
       become: true
 
-    - name: Copy jakeblog HTTP socket file
-      ansible.builtin.copy:
-        src: files/jakeblog.socket
-        dest: /etc/systemd/system/jakeblog.socket
-        owner: root
-        group: root
-        mode: '0644'
-      become: true
-
-    - name: Copy jakeblog HTTPS socket file
-      ansible.builtin.copy:
-        src: files/jakeblog-secure.socket
-        dest: /etc/systemd/system/jakeblog-secure.socket
-        owner: root
-        group: root
-        mode: '0644'
-      become: true
-
     - name: Enable the JakeBlog service
       ansible.builtin.systemd:
-        name: "{{ item }}"
+        name: jakeblog.service
         state: started
         enabled: true
         daemon_reload: true
-      loop:
-        - jakeblog.socket 
-        - jakeblog-secure.socket 
-        - jakeblog.service
       become: true
 
     - name: Disable services which consume to much memory for a nano_instance

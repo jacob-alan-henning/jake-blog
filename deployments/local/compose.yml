@@ -4,8 +4,8 @@ services:
   jake-blog:
     image: jake-blog
     ports:
-      - "443:8080"
-      - "80:80"
+      - "0.0.0.0:443:8080"
+      - "0.0.0.0:80:80"
     networks:
       - monitoring-network
     env_file:
