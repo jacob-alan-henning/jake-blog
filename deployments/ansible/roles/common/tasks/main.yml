@@ -103,7 +103,7 @@
 
     - name: Enable swap 
       ansible.builtin.command: swapon /swapfile
-      when: swap_enabled_rc != 0
+      when: swap_enabled.rc != 0
       become: true
 
     - name: Add swap entry to ftsab
