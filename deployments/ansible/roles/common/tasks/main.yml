@@ -81,6 +81,7 @@
     - name: Check if swap is enabled 
       ansible.builtin.shell: swapon --show | grep -q /swapfile
       register: swap_enabled
+      failed_when: false
       changed_when: false 
 
     - name: Make swap file 
