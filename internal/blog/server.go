@@ -270,12 +270,13 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 
 	uptime := time.Since(s.startTime)
 	count := s.lts.GetArticlesServed()
+	goCount := s.lts.GetGoRoutineCount()
 
 	buf := make([]byte, 0, 19)
 	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")
 	dtStr := string(buf)
 
-	fmt.Fprintf(w, "<p>Uptime: %s</p><p>Articles Served: %d</p>", uptime, count)
+	fmt.Fprintf(w, "<p>blog.process.uptime: %s</p><p>articles.served: %d</p><p>goroutine.count: %d", uptime, count, goCount)
 	fmt.Fprintf(w, "<p>Last Updated: %s</p>", dtStr)
 }
 

@@ -34,6 +34,14 @@ func (e *MetricsExporter) ForceFlush(context.Context) error {
 func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.ResourceMetrics) error {
 	for _, scopeMetrics := range metrics.ScopeMetrics {
 		for _, m := range scopeMetrics.Metrics {
+			if m.Name == "goroutine.count" {
+				if data, ok := m.Data.(metricdata.Gauge[int64]); ok {
+					for _, point := range data.DataPoints {
+						e.localTem.numGoRo.Store(point.Value)
+					}
+				}
+			}
+
 			if m.Name == "articles.served" {
 				if data, ok := m.Data.(metricdata.Sum[int64]); ok {
 					for _, point := range data.DataPoints {
@@ -85,13 +93,20 @@ func (bs *BlogServer) InstallExportPipeline(ctx context.Context) error {
 		sdktrace.WithResource(res),
 	)
 
-	// Set up meter provider
+	reader := metric.NewPeriodicReader(
+		metricsExporter,
+		metric.WithInterval(time.Second*1),
+	)
+
+	views := []metric.View{
+		metric.NewView(metric.Instrument{Kind: metric.InstrumentKindGauge},
+			metric.Stream{Aggregation: metric.AggregationLastValue{}}),
+	}
+
 	meterProvider := metric.NewMeterProvider(
 		metric.WithResource(res),
-		metric.WithReader(metric.NewPeriodicReader(
-			metricsExporter,
-			metric.WithInterval(time.Second*1),
-		)),
+		metric.WithReader(reader),
+		metric.WithView(views...),
 	)
 
 	// Set global providers

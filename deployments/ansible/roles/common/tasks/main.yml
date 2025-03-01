@@ -302,6 +302,12 @@
         debug: true
       become: true
 
+    - name: Pull jakeblog image 
+      community.docker.docker_image:
+        source: pull 
+        name: "{{ registry | trim }}/{{ repository | trim }}:{{ image_tag | trim }}"
+      become: true
+
     - name: Copy jakeblog service file
       ansible.builtin.copy:
         src: files/jakeblog.service
