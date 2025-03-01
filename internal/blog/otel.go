@@ -34,19 +34,14 @@ func (e *MetricsExporter) ForceFlush(context.Context) error {
 func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.ResourceMetrics) error {
 	for _, scopeMetrics := range metrics.ScopeMetrics {
 		for _, m := range scopeMetrics.Metrics {
-			if m.Name == "goroutine.count" {
-				if data, ok := m.Data.(metricdata.Gauge[int64]); ok {
-					for _, point := range data.DataPoints {
-						e.localTem.numGoRo.Store(point.Value)
-					}
+			switch data := m.Data.(type) {
+			case metricdata.Gauge[int64]:
+				for _, point := range data.DataPoints {
+					e.localTem.UpdateMetricFromName(m.Name, point.Value)
 				}
-			}
-
-			if m.Name == "articles.served" {
-				if data, ok := m.Data.(metricdata.Sum[int64]); ok {
-					for _, point := range data.DataPoints {
-						e.localTem.articlesServed.Store(point.Value)
-					}
+			case metricdata.Sum[int64]:
+				for _, point := range data.DataPoints {
+					e.localTem.UpdateMetricFromName(m.Name, point.Value)
 				}
 			}
 		}

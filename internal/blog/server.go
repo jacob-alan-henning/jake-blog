@@ -268,16 +268,26 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
+	var metricBuilder strings.Builder
+
 	uptime := time.Since(s.startTime)
-	count := s.lts.GetArticlesServed()
-	goCount := s.lts.GetGoRoutineCount()
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.process.uptime: %s</p>", uptime))
+
+	count := s.lts.articlesServed.Load()
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", count))
+
+	goCount := s.lts.numGoRo.Load()
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.goroutine.count: %d</p>", goCount))
+
+	heapBytes := s.lts.heapAlloc.Load()
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.heap.alloc.bytes: %d</p>", heapBytes))
 
 	buf := make([]byte, 0, 19)
 	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")
 	dtStr := string(buf)
+	metricBuilder.WriteString(fmt.Sprintf("<p>Last Updated: %s</p>", dtStr))
 
-	fmt.Fprintf(w, "<p>blog.process.uptime: %s</p><p>articles.served: %d</p><p>goroutine.count: %d", uptime, count, goCount)
-	fmt.Fprintf(w, "<p>Last Updated: %s</p>", dtStr)
+	fmt.Fprint(w, metricBuilder.String())
 }
 
 func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {

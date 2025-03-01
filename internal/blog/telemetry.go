@@ -18,6 +18,8 @@ type LocalTelemetryStorage struct {
 	latestSpan     tracetest.SpanStub
 	articlesServed atomic.Int64
 	numGoRo        atomic.Int64
+	heapAlloc      atomic.Int64
+	stackAlloc     atomic.Int64
 	spanMu         sync.RWMutex
 	spanChan       chan tracetest.SpanStub
 }
@@ -27,6 +29,17 @@ func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 		spanChan: make(chan tracetest.SpanStub, 10),
 	}
 	return storage
+}
+
+func (lts *LocalTelemetryStorage) UpdateMetricFromName(name string, val int64) {
+	switch name {
+	case "goroutine.count":
+		lts.numGoRo.Store(val)
+	case "articles.served":
+		lts.articlesServed.Store(val)
+	case "blog.heap.alloc.bytes":
+		lts.heapAlloc.Store(val)
+	}
 }
 
 func (lts *LocalTelemetryStorage) Start(ctx context.Context) error {
@@ -57,13 +70,24 @@ func runtimeMetricLoop(ctx context.Context) {
 		return
 	}
 
+	goHeapAlloc, err := meter.Int64Gauge("blog.heap.alloc.bytes",
+		metric.WithDescription("bytes allocated to the heap by the blog"),
+		metric.WithUnit("bytes"))
+	if err != nil {
+		log.Printf("failed to initialize runtime metrics %v", err)
+		return
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
 			goRunNum.Record(ctx, int64(runtime.NumGoroutine()))
-			time.Sleep(100 * time.Millisecond)
+			goHeapAlloc.Record(ctx, int64(m.HeapAlloc))
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
@@ -84,12 +108,4 @@ func (lts *LocalTelemetryStorage) GetLastSpanJSON() (string, error) {
 		return "", err
 	}
 	return string(data), nil
-}
-
-func (lts *LocalTelemetryStorage) GetArticlesServed() int64 {
-	return lts.articlesServed.Load()
-}
-
-func (lts *LocalTelemetryStorage) GetGoRoutineCount() int64 {
-	return lts.numGoRo.Load()
 }
