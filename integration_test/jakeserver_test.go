@@ -119,7 +119,7 @@ This is a test article's content.`
 			name:           "metrics endpoint", // verify correct response from metrics endpoint
 			path:           "/telemetry/metric",
 			expectedStatus: http.StatusOK,
-			expectedBody:   "articles.served: 0",
+			expectedBody:   "blog.articles.served: 0",
 		},
 		{
 			name:           "article content", // verify correct response from real article
@@ -165,6 +165,6 @@ This is a test article's content.`
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		require.Contains(t, string(body), "articles.served: 1")
+		require.Contains(t, string(body), "blog.articles.served: 1")
 	})
 }
