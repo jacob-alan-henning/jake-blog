@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"jakeblog/internal/blog"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"jakeblog/internal/blog"
 
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +119,7 @@ This is a test article's content.`
 			name:           "metrics endpoint", // verify correct response from metrics endpoint
 			path:           "/telemetry/metric",
 			expectedStatus: http.StatusOK,
-			expectedBody:   "Articles Served: 0",
+			expectedBody:   "articles.served: 0",
 		},
 		{
 			name:           "article content", // verify correct response from real article
@@ -134,7 +133,7 @@ This is a test article's content.`
 			expectedStatus: http.StatusNotFound,
 		},
 		{
-			name:           "Path traversal attempt", //verify users cannot use path traversal
+			name:           "Path traversal attempt", // verify users cannot use path traversal
 			path:           "/article/../../../etc/passwd",
 			expectedStatus: http.StatusNotFound,
 		},
@@ -166,6 +165,6 @@ This is a test article's content.`
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		require.Contains(t, string(body), "Articles Served: 1")
+		require.Contains(t, string(body), "articles.served: 1")
 	})
 }
