@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -85,8 +86,20 @@ func runtimeMetricLoop(ctx context.Context) {
 		default:
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
+
 			goRunNum.Record(ctx, int64(runtime.NumGoroutine()))
-			goHeapAlloc.Record(ctx, int64(m.HeapAlloc))
+
+			heapAlloc := m.HeapAlloc
+			var heapAllocInt64 int64
+
+			if heapAlloc >= uint64(math.MaxInt64) {
+				log.Print("gosec was right and i am an idiot")
+				heapAllocInt64 = math.MaxInt64
+			} else {
+				heapAllocInt64 = int64(heapAlloc)
+			}
+
+			goHeapAlloc.Record(ctx, int64(heapAllocInt64))
 			time.Sleep(5 * time.Second)
 		}
 	}
