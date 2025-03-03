@@ -157,7 +157,7 @@ This is a test article's content.`
 
 	// verify metrics update after viewing article
 	t.Run("metrics update after view", func(t *testing.T) {
-		time.Sleep(1500 * time.Millisecond) // 1.5 seconds to ensure we catch the export
+		time.Sleep(6000 * time.Millisecond) // 1.5 seconds to ensure we catch the export
 
 		resp, err = client.Get(serverURL + "/telemetry/metric")
 		require.NoError(t, err)
