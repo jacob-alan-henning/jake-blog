@@ -273,14 +273,18 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	uptime := time.Since(s.startTime)
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.process.uptime: %s</p>", uptime))
 
-	count := s.lts.articlesServed.Load()
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", count))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", s.lts.articlesServed.Load()))
 
-	goCount := s.lts.numGoRo.Load()
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.goroutine.count: %d</p>", goCount))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p50: %d</p>", s.lts.reqDur50.Load()))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p90: %d</p>", s.lts.reqDur90.Load()))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p95: %d</p>", s.lts.reqDur95.Load()))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p99: %d</p>", s.lts.reqDur99.Load()))
 
-	heapBytes := s.lts.heapAlloc.Load()
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.heap.alloc.bytes: %d</p>", heapBytes))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.goroutine.count: %d</p>", s.lts.numGoRo.Load()))
+
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.heap.alloc.bytes: %d</p>", s.lts.heapAlloc.Load()))
+
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.stack.alloc.bytes: %d</p>", s.lts.stackAlloc.Load()))
 
 	buf := make([]byte, 0, 19)
 	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")

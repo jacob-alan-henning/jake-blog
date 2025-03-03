@@ -43,6 +43,8 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 				for _, point := range data.DataPoints {
 					e.localTem.UpdateMetricFromName(m.Name, point.Value)
 				}
+			case metricdata.Histogram[float64]:
+				e.localTem.UpdateHistogramMetricFromName(m.Name, data.DataPoints)
 			}
 		}
 	}
@@ -90,12 +92,16 @@ func (bs *BlogServer) InstallExportPipeline(ctx context.Context) error {
 
 	reader := metric.NewPeriodicReader(
 		metricsExporter,
-		metric.WithInterval(time.Second*1),
+		metric.WithInterval(time.Second*5),
 	)
 
 	views := []metric.View{
 		metric.NewView(metric.Instrument{Kind: metric.InstrumentKindGauge},
 			metric.Stream{Aggregation: metric.AggregationLastValue{}}),
+		metric.NewView(metric.Instrument{Kind: metric.InstrumentKindHistogram},
+			metric.Stream{Aggregation: metric.AggregationExplicitBucketHistogram{
+				Boundaries: []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000},
+			}}),
 	}
 
 	meterProvider := metric.NewMeterProvider(
