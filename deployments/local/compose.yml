@@ -17,4 +17,4 @@ services:
 
 networks:
   monitoring-network:
-    driver: host
+    driver: bridge
