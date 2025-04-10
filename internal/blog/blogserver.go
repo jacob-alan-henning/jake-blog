@@ -92,11 +92,8 @@ func (bs *BlogServer) Start() error {
 }
 
 func (bs *BlogServer) run() error {
-	select {
-	case sig := <-bs.sigChan:
-		log.Printf("Received signal %s, initiating shutdown...", sig)
-	}
-
+	sig := <-bs.sigChan
+	log.Printf("Received signal %s, initiating shutdown...", sig)
 	return bs.shutdown()
 }
 
@@ -108,5 +105,21 @@ func (bs *BlogServer) shutdown() error {
 
 	<-ctx.Done()
 
+	return nil
+}
+
+// I want to encapsulate starting the blog server so I can do runtime config from env vars
+func StartBlogServer() error {
+	bs, err := NewBlogServer(
+		WithConfig("BLOG_"),
+	)
+	if err != nil {
+		return err
+	}
+
+	err = bs.Start()
+	if err != nil {
+		return err
+	}
 	return nil
 }

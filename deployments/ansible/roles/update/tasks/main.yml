@@ -1,0 +1,38 @@
+---
+- block:
+    - name: Get current public IP
+      ansible.builtin.uri:
+        url: https://api.ipify.org?format=json
+        return_content: yes
+      register: public_ip
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Ensure public IP was retrieved successfully
+      ansible.builtin.fail:
+        msg: "Failed to retrieve public IP"
+      when: public_ip.json is not defined or public_ip.json.ip is not defined
+      changed_when: false
+
+    - name: Open SSH port for current IP
+      ansible.builtin.command: >-
+        aws lightsail open-instance-public-ports
+        --instance-name {{ instance_name }}
+        --port-info fromPort=22,toPort=22,protocol=TCP,cidrs="{{ public_ip.json.ip }}/32"
+      delegate_to: localhost
+      environment: 
+        PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+      changed_when: false
+
+    - name: Trigger blog content update
+      ansible.builtin.command: 
+        cmd: docker kill --signal=SIGHUP jakeblog-jake-blog-1 
+      become: true  
+  always:
+    - name: Close SSH port
+      ansible.builtin.command: >-
+        aws lightsail close-instance-public-ports
+        --instance-name {{ instance_name }}
+        --port-info fromPort=22,toPort=22,protocol=TCP
+      delegate_to: localhost
+      changed_when: false

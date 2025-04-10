@@ -64,11 +64,11 @@ func (s *Server) Start(ctx context.Context) error {
 		ReadTimeout:  15 * time.Second,
 	}
 
-	log.Printf("HTTPS_ENABLED: %t", s.bm.Config.HTTPSOn)
+	log.Printf("https enabled: %t", s.bm.Config.HTTPSOn)
 
 	signal.Notify(s.sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Printf("Starting server on port %s", s.bm.Config.ServerPort)
+	log.Printf("starting server on port %s", s.bm.Config.ServerPort)
 
 	if s.bm.Config.HTTPSOn {
 		go func() {
@@ -192,7 +192,7 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 
 	return otelhttp.NewHandler(validateHandler, name,
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-			return fmt.Sprintf("Serve %s", r.URL.Path)
+			return "Serve " + r.URL.Path
 		}),
 		otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 	)
@@ -206,7 +206,10 @@ func (s *Server) ArticleList(w http.ResponseWriter, r *http.Request) {
 	defer s.bm.articleMutex.RUnlock()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, s.bm.HtmlList)
+	_, err := w.Write(s.bm.HtmlList)
+	if err != nil {
+		span.SetAttributes(attribute.String("error", "failed to write articlelist"))
+	}
 }
 
 func (s *Server) RedirectHandler(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +245,11 @@ func (s *Server) Article(w http.ResponseWriter, r *http.Request) {
 	s.articleViews.Add(r.Context(), 1)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, article.Content)
+	_, err = w.Write(article.Content)
+	if err != nil {
+		log.Printf("failed to write article response %v", err)
+		span.SetAttributes(attribute.String("error", "write failed"))
+	}
 }
 
 func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
@@ -297,5 +304,8 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/rss+xml")
 	feedContent := s.bm.GetRssFeed()
-	fmt.Fprint(w, feedContent)
+	_, err := w.Write(feedContent)
+	if err != nil {
+		log.Printf("failed to write rss feed %v", err)
+	}
 }

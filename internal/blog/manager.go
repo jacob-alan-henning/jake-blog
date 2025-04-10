@@ -18,16 +18,16 @@ import (
 type Article struct {
 	Title    string
 	FileName string
-	Content  string
+	Content  []byte
 	Url      string
 	Date     time.Time
 }
 
 type BlogManager struct {
 	Articles     map[string]Article
-	HtmlList     string // html snippet - list of articles
+	HtmlList     []byte // html snippet - list of articles
 	SiteMap      string
-	RSSFeed      string
+	RSSFeed      []byte
 	Config       *Config
 	articleMutex sync.RWMutex
 	updateChan   chan struct{} // Single channel for all updates
@@ -48,7 +48,7 @@ func (bm *BlogManager) GetArticle(name string) (Article, bool) {
 	return article, exists
 }
 
-func (bm *BlogManager) GetRssFeed() string {
+func (bm *BlogManager) GetRssFeed() []byte {
 	bm.articleMutex.RLock()
 	defer bm.articleMutex.RUnlock()
 	return bm.RSSFeed
@@ -70,7 +70,7 @@ func (bm *BlogManager) ListenForUpdates(ctx context.Context) {
 				bm.TriggerUpdate()
 			case <-bm.updateChan:
 				if err := bm.updateContent(); err != nil {
-					log.Printf("Update failed: %v", err)
+					log.Printf("update failed: %v", err)
 				}
 			}
 		}
@@ -80,9 +80,9 @@ func (bm *BlogManager) ListenForUpdates(ctx context.Context) {
 func (bm *BlogManager) TriggerUpdate() {
 	select {
 	case bm.updateChan <- struct{}{}:
-		log.Printf("Update triggered")
+		log.Printf("update triggered")
 	default:
-		log.Printf("Update already pending, skipping...")
+		log.Printf("update already pending, skipping...")
 	}
 }
 
@@ -162,7 +162,7 @@ func (bm *BlogManager) updateContent() error {
 		newArticles[fileName] = Article{
 			Title:    headerTitle,
 			FileName: fileName,
-			Content:  html,
+			Content:  []byte(html),
 			Url:      fmt.Sprintf("/article/%s", fileName),
 			Date:     lastModified,
 		}
@@ -192,10 +192,10 @@ func (bm *BlogManager) updateContent() error {
 
 	bm.articleMutex.Lock()
 	bm.Articles = newArticles
-	bm.HtmlList = strings.Join(links, "<br/>")
-	bm.RSSFeed = rssBuilder.String()
+	bm.HtmlList = []byte(strings.Join(links, "<br/>"))
+	bm.RSSFeed = []byte(rssBuilder.String())
 	bm.articleMutex.Unlock()
 
-	log.Printf("Content updated successfully: loaded %d articles", len(newArticles))
+	log.Printf("content updated successfully: loaded %d articles", len(newArticles))
 	return nil
 }

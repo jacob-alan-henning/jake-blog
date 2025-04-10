@@ -60,7 +60,6 @@ func getFileLastModified(cfg *Config, filePath string) (time.Time, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to iterate commits: %w", err)
 	}
@@ -74,13 +73,13 @@ func getFileLastModified(cfg *Config, filePath string) (time.Time, error) {
 
 func FetchMarkdownRepo(cfg *Config) error {
 	if cfg.LocalOnly {
-		log.Printf("LocalOnly == true no repo cloned")
+		log.Printf("localOnly repository: %t", true)
 		return nil
 	}
 
 	sshAuth, err := ssh.NewPublicKeysFromFile("git", cfg.KeyPrivPath, cfg.RepoPass)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "Error loading SSH keys: %v\n", err)
+		fmt.Fprintf(os.Stdout, "error loading SSH keys: %v\n", err)
 
 		return err
 	}
@@ -92,7 +91,7 @@ func FetchMarkdownRepo(cfg *Config) error {
 	})
 	if err != nil {
 		if err == git.ErrRepositoryAlreadyExists {
-			log.Println("Repo already exists, opening and pulling latest changes")
+			log.Println("repo already exists, opening and pulling latest changes")
 
 			repo, err := git.PlainOpen(cfg.ContentDir)
 			if err != nil {
@@ -108,15 +107,15 @@ func FetchMarkdownRepo(cfg *Config) error {
 				Auth:       sshAuth,
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
-				log.Printf("Failed to pull repo: %v", err)
+				log.Printf("failed to pull repo: %v", err)
 				return err
 			}
 
 		} else {
-			log.Printf("Error cloning repository: %v", err)
+			log.Printf("error cloning repository: %v", err)
 			return err
 		}
 	}
-	log.Printf("Repository cloned successfully: %v\n", repo)
+	log.Printf("repository cloned successfully: %v\n", repo)
 	return nil
 }

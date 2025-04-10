@@ -1,0 +1,44 @@
+name: jake-blog-content-update
+
+on:
+  repository_dispatch:
+    types: [blog-update]
+
+jobs:
+  blog-update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./deployments/ansible
+    steps:
+      - uses: actions/checkout@v4 
+
+      - name: Setup Ansible
+        uses: alex-oleshkevich/setup-ansible@v1.0.1
+        with:
+          version: "11.2.0"
+
+      - name: Install Ansible collection dependencies
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Install dynamic inventory dependencies
+        run: pip install -r inventory/requirements.txt
+
+      - name: Make dynamic inventory executable
+        run: chmod +x inventory/lightsail-inventory
+
+      - name: Configure SSH key 
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%b" "$SSH_KEY" > ~/.ssh/lightsail.pem
+          chmod 600 ~/.ssh/lightsail.pem
+          echo "Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            IdentityFile ~/.ssh/lightsail.pem
+            User ubuntu" > ~/.ssh/config
+
+      - name: "Run Ansible playbook"
+        run: ansible-playbook site.yml --tags update

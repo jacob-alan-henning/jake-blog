@@ -6,3 +6,5 @@
   roles:
     - role: common
       tags: ['common']
+    - role: update
+      tags: ['update']

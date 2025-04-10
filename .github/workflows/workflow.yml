@@ -3,8 +3,6 @@ name: jake-blog
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
 
@@ -151,5 +149,5 @@ jobs:
           BLOG_REPO_PASS: ${{ secrets.BLOG_REPO_PASS }}
           BLOG_REPO_PRIV_KEY: ${{ secrets.BLOG_REPO_PRIV_KEY }}
           DNS_DOMAIN: jake-henning.com
-        run: ansible-playbook site.yml
+        run: ansible-playbook site.yml --tags common
 

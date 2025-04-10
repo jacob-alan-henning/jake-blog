@@ -11,6 +11,7 @@ services:
     env_file:
       - locals.env
     volumes:
+      - /Users/jake/jake-blog/deployments/local/profile:/tmp/profile
       - /Users/jake/local-certs:/etc/letsencrypt
       - /Users/jake/blogs:/tmp/content
 
