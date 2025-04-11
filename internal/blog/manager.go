@@ -127,6 +127,7 @@ func (bm *BlogManager) updateContent() error {
             <link rel="icon" href="/favicon.ico" type="image/x-icon" />
         </head>
         <body>
+            <a href="/" class="home-link">Home</a>
             %s
         </body>
         </html>
@@ -196,7 +197,7 @@ func (bm *BlogManager) updateContent() error {
 		arti := newArticles[key]
 
 		// html list
-		links = append(links, fmt.Sprintf(`<li><a href="/article/%s" target="_blank" rel="noopener noreferrer">%s</a> -- <span class="date">%s</span> </li>`,
+		links = append(links, fmt.Sprintf(`<li><a href="/article/%s">%s</a> -- <span class="date">%s</span> </li>`,
 			arti.FileName, arti.Title, arti.Date.Format("Jan 2, 2006")))
 
 	}
