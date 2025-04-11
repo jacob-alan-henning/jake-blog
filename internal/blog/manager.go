@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -167,9 +168,6 @@ func (bm *BlogManager) updateContent() error {
 			Date:     lastModified,
 		}
 
-		links = append(links, fmt.Sprintf(`<li><a href="/article/%s" target="_blank" rel="noopener noreferrer">%s</a> -- <span class="date">%s</span> </li>`,
-			fileName, headerTitle, lastModified.Format("Jan 2, 2006")))
-
 		rssBuilder.WriteString(fmt.Sprintf(`
       <item>
         <title> %s </title>
@@ -183,6 +181,24 @@ func (bm *BlogManager) updateContent() error {
 			newArticles[fileName].Date.Format("Mon, 15:04:05 GMT"),
 			fmt.Sprintf("https://jake-henning.com%s", newArticles[fileName].Url),
 		))
+	}
+
+	keys := make([]string, 0, len(newArticles))
+	for k := range newArticles {
+		keys = append(keys, k)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		return newArticles[keys[i]].Date.After(newArticles[keys[j]].Date)
+	})
+
+	for _, key := range keys {
+		arti := newArticles[key]
+
+		// html list
+		links = append(links, fmt.Sprintf(`<li><a href="/article/%s" target="_blank" rel="noopener noreferrer">%s</a> -- <span class="date">%s</span> </li>`,
+			arti.FileName, arti.Title, arti.Date.Format("Jan 2, 2006")))
+
 	}
 
 	rssBuilder.WriteString(`
