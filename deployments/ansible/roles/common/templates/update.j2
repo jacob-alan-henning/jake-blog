@@ -1,0 +1,93 @@
+#!/bin/bash
+set -euo pipefail
+
+LOGFILE="/var/log/maintenance.log"
+REBOOT_DELAY=30
+DOMAIN="{{ dns_domain }}"
+WEBROOT="/tmp/certbot-webroot"
+EMAIL="{{ admin_email | default('jacobalanhenning@gmail.com') }}"
+
+cleanup() {
+    local exit_code=$?
+    
+    pkill -f "busybox httpd" || true
+    
+    if [ -d "$WEBROOT" ]; then
+        rm -rf "$WEBROOT"
+    fi
+    
+    if [ $exit_code -ne 0 ]; then
+        echo "[$(date)] Error occurred! Attempting to restore jakeblog service..."
+        systemctl start jakeblog.service || true
+    fi
+    
+    echo "[$(date)] Maintenance script completed with exit code: $exit_code"
+}
+
+trap cleanup EXIT ERR
+
+mkdir -p "$(dirname $LOGFILE)"
+exec > >(tee -a $LOGFILE) 2>&1
+
+echo "[$(date)] Starting maintenance cycle"
+
+AVAILABLE_SPACE=$(df -h / | awk 'NR==2 {print $4}')
+echo "[$(date)] Available disk space: $AVAILABLE_SPACE"
+
+if [ $(df / | awk 'NR==2 {print $4}') -lt 1000000 ]; then  # Less than ~1GB
+    echo "[$(date)] WARNING: Low disk space, maintenance may fail"
+fi
+
+echo "[$(date)] Stopping jakeblog service"
+if ! systemctl stop jakeblog.service; then
+    echo "[$(date)] Failed to stop jakeblog service. Aborting."
+    exit 1
+fi
+
+echo "[$(date)] Updating system packages"
+apt-get update
+apt-get upgrade -y
+
+echo "[$(date)] Running certificate renewal with HTTP-01 challenge"
+
+echo "[$(date)] Creating temporary webroot directory"
+mkdir -p "$WEBROOT"
+chmod 755 "$WEBROOT"
+
+echo "[$(date)] Starting temporary HTTP server for challenge"
+busybox httpd -f -p 80 -h "$WEBROOT" &
+HTTPD_PID=$!
+
+echo "[$(date)] Waiting for HTTP server to initialize..."
+sleep 5
+
+echo "[$(date)] Attempting certificate renewal"
+if certbot certonly --webroot -w "$WEBROOT" \
+   --keep-until-expiring -d "$DOMAIN" \
+   --agree-tos -m "$EMAIL" -n; then
+    
+    CERT_EXPIRY=$(certbot certificates 2>/dev/null | grep "Expiry Date" | head -1 | awk '{print $3}')
+    echo "[$(date)] Certificate renewal successful! Valid until $CERT_EXPIRY"
+else
+    echo "[$(date)] Certificate renewal failed!"
+fi
+
+echo "[$(date)] Stopping temporary HTTP server"
+if kill $HTTPD_PID 2>/dev/null; then
+    echo "[$(date)] HTTP server stopped"
+else
+    echo "[$(date)] HTTP server already stopped"
+fi
+
+echo "[$(date)] Removing temporary webroot"
+rm -rf "$WEBROOT"
+
+echo "[$(date)] Starting jakeblog service"
+if ! systemctl start jakeblog.service; then
+    echo "[$(date)] Failed to start jakeblog service. Check configuration!"
+fi
+
+echo "[$(date)] Maintenance complete, scheduling reboot in $REBOOT_DELAY seconds"
+nohup bash -c "sleep $REBOOT_DELAY && /sbin/reboot" &
+
+exit 0

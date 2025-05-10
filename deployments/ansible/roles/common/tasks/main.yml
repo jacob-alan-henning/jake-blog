@@ -334,6 +334,26 @@
         - fwupd
         - ModemManager
         - udisks2
+        - snap.certbot.renew
+      become: true
+
+    - name: Install maintenance script 
+      ansible.builtin.template:
+        src: templates/update.j2
+        dest: /opt/jakeblog/update.sh
+        owner: jakeblog
+        group: jakeblog
+        mode: '0755'
+      become: true
+
+    - name: Set maintenance script on cron
+      ansible.builtin.cron:
+        name: "Weekly system maintenance"
+        weekday: "6"  
+        hour: "23"    
+        minute: "59"  
+        job: "/opt/jakeblog/update.sh"
+        user: "root"  
       become: true
 
   always:
