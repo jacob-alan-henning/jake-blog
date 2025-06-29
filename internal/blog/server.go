@@ -185,7 +185,7 @@ func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 		}
 
 		// add csp headers
-		w.Header().Set("Content-Security-Policy", `default-src 'self'; script-src 'self'; script-src-elem 'self'; style-src 'self'; img-src 'self'; connect-src 'self'`)
+		w.Header().Set("Content-Security-Policy", `default-src 'self'; script-src 'self'; script-src-elem 'self'; style-src 'self' ; img-src 'self' https://jakeblog-blog-image-cache.s3.us-east-1.amazonaws.com; connect-src 'self'`)
 
 		h.ServeHTTP(w, r)
 	})
