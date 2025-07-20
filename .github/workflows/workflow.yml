@@ -158,3 +158,15 @@ jobs:
           DNS_DOMAIN: jake-henning.com
         run: ansible-playbook site.yml --tags common
 
+  smoke-test:
+    needs: deploy-blog
+    runs-on: ubuntu-latest
+
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    steps: 
+      - name: "run smoke test"
+        run: curl -f https://jake-henning.com/content
+
+
+

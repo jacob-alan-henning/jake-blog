@@ -19,6 +19,5 @@ COPY --from=builder /app/web /web
 
 COPY --from=builder /etc/known_hosts /etc/known_hosts
 
-USER appuser
 EXPOSE ${INTERNAL_PORT}
 ENTRYPOINT ["/jake-blog"]
