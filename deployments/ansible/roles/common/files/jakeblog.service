@@ -9,7 +9,7 @@ User=jakeblog
 Group=jakeblog
 WorkingDirectory=/opt/jakeblog
 ExecStart=/usr/bin/docker compose up
-ExecStop=/usr/bin/docker compose down
+ExecStop=/usr/bin/docker compose down --remove-orphans
 Restart=on-failure
 RestartSec=5s
 
