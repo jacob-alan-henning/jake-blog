@@ -31,6 +31,10 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read
+
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     steps:
     - uses: actions/checkout@v4
@@ -38,9 +42,8 @@ jobs:
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+        role-to-assume: ${{ secrets.AWS_IDP_ARN }}
+        aws-region: us-east-1
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -57,6 +60,10 @@ jobs:
 
   provision:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read
+
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     defaults:
       run:
@@ -69,13 +76,12 @@ jobs:
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: "1.5.7"
-
+     
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+        role-to-assume: ${{ secrets.AWS_IDP_ARN }}
+        aws-region: us-east-1
 
     - name: Terraform Init
       run: terraform init
@@ -93,6 +99,10 @@ jobs:
   deploy-blog:
     needs: [build,test,provision]
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read
+
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     defaults:
       run:
@@ -104,22 +114,16 @@ jobs:
         uses: alex-oleshkevich/setup-ansible@v1.0.1
         with:
           version: "11.2.0"
-
+       
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
+          role-to-assume: ${{ secrets.AWS_IDP_ARN }}
+          aws-region: us-east-1
+   
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-       #- name: Install AWS CLI 
-         #run: |
-           #sudo apt-get update
-           #sudo apt-get install -y awscli
 
       - name: Install Ansible collection dependencies
         run: ansible-galaxy collection install -r requirements.yml
@@ -148,9 +152,7 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
           REPOSITORY: ${{ secrets.ECR_PRIVATE_REPO }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
           BLOG_REPO_PASS: ${{ secrets.BLOG_REPO_PASS }}
           BLOG_REPO_PRIV_KEY: ${{ secrets.BLOG_REPO_PRIV_KEY }}
           DNS_DOMAIN: jake-henning.com

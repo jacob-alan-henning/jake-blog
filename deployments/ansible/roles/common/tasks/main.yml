@@ -46,8 +46,6 @@
         image_tag: "{{ lookup('env', 'IMAGE_TAG') }}"
         blog_repo_pass: "{{ lookup('env', 'BLOG_REPO_PASS') }}"
         aws_region: "{{ lookup('env','AWS_REGION') }}"
-        aws_access_key_id: "{{ lookup('env','AWS_ACCESS_KEY_ID') }}"
-        aws_secret_access_key: "{{ lookup('env','AWS_SECRET_ACCESS_KEY') }}"
         registry: " {{ lookup('env','REGISTRY') }} "
         repository: "{{ lookup('env','REPOSITORY') }}"
         dns_domain: "{{ lookup('env','DNS_DOMAIN') }}"
