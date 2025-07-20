@@ -166,7 +166,7 @@ jobs:
 
     steps: 
       - name: "run smoke test"
-        run: curl -f https://jake-henning.com/content
+        run: curl -f https://jake-henning.com/content/
 
 
 
