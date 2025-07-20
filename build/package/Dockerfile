@@ -19,11 +19,6 @@ COPY --from=builder /app/web /web
 
 COPY --from=builder /etc/known_hosts /etc/known_hosts
 
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup && \
-    chown -R appuser:appgroup /jake-blog /web /etc/known_hosts && \
-    chmod +x /jake-blog
-
 USER appuser
 EXPOSE ${INTERNAL_PORT}
 ENTRYPOINT ["/jake-blog"]
