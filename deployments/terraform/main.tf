@@ -31,7 +31,7 @@ resource "aws_lightsail_instance_public_ports" "main" {
 }
 
 resource "aws_lightsail_domain_entry" "blog" {
-  domain_name = var.domain_name
+  domain_name = "jake-henning.com"
   name        = var.domain_name
   type        = "A"
   target      = aws_lightsail_static_ip.main.ip_address
