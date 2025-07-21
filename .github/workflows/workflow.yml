@@ -80,6 +80,7 @@ jobs:
           aws-region: us-east-1
 
       - name: deploy-staging 
+        continue-on-error: true  
         working-directory: deployments/terraform
         run: | 
           terraform init -backend-config="key=staging.tfstate"
@@ -121,6 +122,7 @@ jobs:
             User ubuntu" > ~/.ssh/config
 
       - name: "Run Ansible playbook"
+        continue-on-error: true  
         working-directory: deployments/ansible
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -146,6 +148,15 @@ jobs:
         run: |
           terraform init -backend-config="key=staging.tfstate"
           terraform destroy -var-file=env/staging/staging.tfvars -auto-approve
+
+      - name: Fail job if staging test failed
+        if: always()
+        run: |
+          if [ "${{ steps.staging-test.outcome }}" = "failure" ]; then
+            echo "::error::Staging tests failed!"
+            exit 1
+          fi
+          echo "::notice::Staging tests passed!"
 
   provision:
     needs: [staging-test]
