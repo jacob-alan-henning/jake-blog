@@ -38,7 +38,7 @@ resource "aws_lightsail_domain_entry" "blog" {
 }
 
 resource "aws_s3_bucket" "image-cache" {
-  bucket = "jakeblog-blog-image-cache"
+  bucket = var.bucket_name
 }
 
 resource "aws_s3_bucket_cors_configuration" "image_cache_cors" {

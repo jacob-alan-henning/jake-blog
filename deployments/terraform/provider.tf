@@ -9,7 +9,7 @@ terraform {
 
   backend "s3" {
     bucket = "jake-blog-tfstate"
-    key    = "terraform.tfstate"
+    #key    = "terraform.tfstate"
     region = "us-east-1"
   }
 }
@@ -17,3 +17,4 @@ terraform {
 provider "aws" {
   region = var.region
 }
+

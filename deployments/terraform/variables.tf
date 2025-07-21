@@ -27,3 +27,9 @@ variable "bundle_id" {
   description = "Bundle ID for the Lightsail instance"
   type        = string
 }
+
+variable "bucket_name" {
+  description = "name of s3 bucket for image cache"
+  type        = string
+}
+
