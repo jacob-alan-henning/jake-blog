@@ -2,8 +2,10 @@
 import boto3
 import json
 import sys
+import os 
 
 def get_lightsail_instances():
+    name_prefix = os.getenv('ANSIBLE_LIGHTSAIL_PREFIX', 'jake-blog')
     client = boto3.client('lightsail')
     instances = client.get_instances()
     
@@ -30,7 +32,7 @@ def get_lightsail_instances():
         }
         
         inventory["all"]["hosts"].append(ip)
-        if name.startswith('jake-blog'):
+        if name.startswith(name_prefix):
             inventory["blog"]["hosts"].append(ip)
     
     return inventory

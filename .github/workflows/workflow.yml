@@ -4,7 +4,6 @@ on:
   push:
     branches: [ "main" ]
 
-
 jobs:
 
   test:
@@ -58,7 +57,107 @@ jobs:
         docker build --platform linux/amd64 --build-arg INTERNAL_PORT=8080 -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f build/package/Dockerfile .
         docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG 
 
+  staging-test:
+    needs: [build,test]
+    permissions:
+      id-token: write 
+      contents: read 
+
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
+     
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_IDP_ARN }}
+          aws-region: us-east-1
+
+      - name: deploy-staging 
+        working-directory: deployments/terraform
+        run: | 
+          terraform init -backend-config="key=staging.tfstate"
+          terraform plan -var-file=env/staging/staging.tfvars -out=staging.tfplan
+          terraform apply staging.tfplan
+
+      - name: Setup Ansible
+        uses: alex-oleshkevich/setup-ansible@v1.0.1
+        with:
+          version: "11.2.0"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install Ansible collection dependencies
+        working-directory: deployments/ansible 
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Install dynamic inventory dependencies
+        working-directory: deployments/ansible
+        run: pip install -r inventory/requirements.txt
+
+      - name: Make dynamic inventory executable
+        working-directory: deployments/ansible
+        run: chmod +x inventory/lightsail-inventory
+
+      - name: Configure SSH key 
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%b" "$SSH_KEY" > ~/.ssh/lightsail.pem
+          chmod 600 ~/.ssh/lightsail.pem
+          echo "Host *
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            IdentityFile ~/.ssh/lightsail.pem
+            User ubuntu" > ~/.ssh/config
+
+      - name: "Run Ansible playbook"
+        working-directory: deployments/ansible
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          REPOSITORY: ${{ secrets.ECR_PRIVATE_REPO }}
+          AWS_REGION: us-east-1
+          BLOG_REPO_PASS: ${{ secrets.BLOG_REPO_PASS }}
+          BLOG_REPO_PRIV_KEY: ${{ secrets.BLOG_REPO_PRIV_KEY }}
+          DNS_DOMAIN: staging.jake-henning.com
+          ANSIBLE_LIGHTSAIL_PREFIX: staging-jake
+        run: ansible-playbook site.yml --tags common
+
+      - name: Test staging deployment
+        id: test
+        continue-on-error: true  # Don't stop workflow immediately
+        run: |
+          sleep 60
+          curl -f http://staging.jake-henning.com/content/
+
+      - name: Cleanup staging
+        working-directory: deployments/terraform
+        if: always()
+        run: |
+          terraform init -backend-config="key=staging.tfstate"
+          terraform destroy -var-file=env/staging/staging.tfvars -auto-approve
+
+      - name: Report test results
+        if: always()
+        run: |
+          if [ "${{ steps.test.outcome }}" = "failure" ]; then
+            echo "::error::Staging tests failed!"
+            exit 1
+          fi
+          echo "::notice::Staging tests passed!"
+
   provision:
+    needs: [staging-test]
     runs-on: ubuntu-latest
     permissions:
       id-token: write 
@@ -84,20 +183,21 @@ jobs:
         aws-region: us-east-1
 
     - name: Terraform Init
-      run: terraform init
+      run: terraform init -backend-config="key=terraform.tfstate"
 
     - name: Terraform Format Check
       run: terraform fmt -check
       
     - name: Terraform Plan
       id: plan
-      run: terraform plan -out=plan.tfplan
+      run: terraform plan -var-file=env/prod/prod.tfvars -out=plan.tfplan
+
       
     - name: Terraform Apply
       run: terraform apply plan.tfplan 
 
   deploy-blog:
-    needs: [build,test,provision]
+    needs: [provision]
     runs-on: ubuntu-latest
     permissions:
       id-token: write 
