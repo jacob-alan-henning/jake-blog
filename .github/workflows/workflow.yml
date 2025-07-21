@@ -139,8 +139,7 @@ jobs:
         id: test
         continue-on-error: true  
         run: |
-          sleep 60
-          curl -f http://staging.jake-henning.com/content/
+          curl -f https://staging.jake-henning.com/content/
 
       - name: Cleanup staging
         working-directory: deployments/terraform
