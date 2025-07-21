@@ -85,6 +85,7 @@
     - name: Make swap file 
       ansible.builtin.command: dd if=/dev/zero of=/swapfile bs=1M count=5120
       when: not swap_file_check.stat.exists
+      become: true
 
     - name: Set swap file permissions
       ansible.builtin.file:
