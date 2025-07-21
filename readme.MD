@@ -41,9 +41,6 @@ go run cmd/jakeserver.go
 ## Testing
 
 ```bash
-# Unit tests
-go test ./internal/blog
-
 # Integration tests  
 go test ./integration_test
 
