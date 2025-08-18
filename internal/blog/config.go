@@ -21,6 +21,7 @@ type Config struct {
 	HTTPSCRT    string // HTTPSCRT is the location of the https certificate
 	HTTPSKey    string // HTTPSKEY is the location of the key associated with your certifacte
 	CPUProf     bool   // CPUPProf is whether cpu profiling is enabled
+	IMAGECACHE  bool   // IMAGECACHE is whether or not to apply custom renderer to markdown images pointing local images to s3 bucket
 }
 
 func DefaultConfig() *Config {
@@ -31,6 +32,7 @@ func DefaultConfig() *Config {
 		LocalOnly:   false,
 		HTTPSOn:     false,
 		CPUProf:     false,
+		IMAGECACHE:  false,
 	}
 }
 
@@ -104,6 +106,7 @@ func WithEnvironment(prefix string) ConfigOption {
 			"LOCAL_ONLY": &c.LocalOnly,
 			"HTTPS_ON":   &c.HTTPSOn,
 			"CPUProf":    &c.CPUProf,
+			"IMAGECACHE": &c.IMAGECACHE,
 		}
 		for env, ptr := range envVars {
 			if value := os.Getenv(prefix + env); value != "" {

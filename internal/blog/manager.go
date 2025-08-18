@@ -154,7 +154,7 @@ func (bm *BlogManager) updateContent() error {
 			continue
 		}
 
-		fileContent, err := markdownToHtml(file)
+		fileContent, err := markdownToHtml(file, bm.Config.IMAGECACHE)
 		if err != nil {
 			log.Printf("Error processing %s: %v", fileName, err)
 			continue
