@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/russross/blackfriday/v2"
 	bf "github.com/russross/blackfriday/v2"
 )
 
@@ -16,7 +15,7 @@ type jakeRenderer struct {
 }
 
 func (r *jakeRenderer) RenderNode(w io.Writer, node *bf.Node, entering bool) bf.WalkStatus {
-	if node.Type == blackfriday.Image && entering {
+	if node.Type == bf.Image && entering {
 		originalDest := string(node.Destination)
 		if !strings.HasPrefix(originalDest, "https://") {
 			fn := strings.Split(originalDest, "/")
@@ -47,7 +46,7 @@ func markdownToHtml(markdownPath string, imageCache bool) (string, error) {
 		return "", err
 	}
 
-	htmlRenderer := blackfriday.NewHTMLRenderer(blackfriday.HTMLRendererParameters{})
+	htmlRenderer := bf.NewHTMLRenderer(bf.HTMLRendererParameters{})
 	cRenderer := &jakeRenderer{
 		HTMLRenderer: htmlRenderer,
 		cacheUrl:     "https://jakeblog-blog-image-cache.s3.us-east-1.amazonaws.com/",
