@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -64,11 +64,11 @@ func (s *Server) Start(ctx context.Context) error {
 		ReadTimeout:  15 * time.Second,
 	}
 
-	log.Printf("https enabled: %t", s.bm.Config.HTTPSOn)
+	serverLogger.Info().Msgf("https enabled: %t", s.bm.Config.HTTPSOn)
 
 	signal.Notify(s.sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	log.Printf("starting server on port %s", s.bm.Config.ServerPort)
+	serverLogger.Info().Msgf("server bound to port %s", s.bm.Config.ServerPort)
 
 	if s.bm.Config.HTTPSOn {
 		go func() {
@@ -104,9 +104,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Wait for shutdown signal
 	select {
 	case <-ctx.Done():
-		log.Println("context cancelled, shutting down server...")
+		serverLogger.Warn().Msg("context cancelled")
 	case sig := <-s.sigChan:
-		log.Printf("received signal %s, shutting down server...", sig)
+		serverLogger.Warn().Msgf("%s received", sig)
 	case err := <-s.errChan:
 		return fmt.Errorf("server error before shutdown: %w", err)
 	}
@@ -123,7 +123,7 @@ func (s *Server) shutdown() error {
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 
-	log.Println("server shutdown complete")
+	serverLogger.Info().Msg("shutdown complete")
 	return nil
 }
 
@@ -242,12 +242,20 @@ func (s *Server) Article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.articleViews.Add(r.Context(), 1)
+	s.articleViews.Add(
+		r.Context(),
+		1,
+		metric.WithAttributes(attribute.String("article", articleName)),
+	)
+	s.articleViews.Add(
+		r.Context(),
+		1,
+	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, err = w.Write(article.Content)
 	if err != nil {
-		log.Printf("failed to write article response %v", err)
+		serverLogger.Error().Msgf("failed to send article to client: %v", err)
 		span.SetAttributes(attribute.String("error", "write failed"))
 	}
 }
@@ -268,7 +276,7 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(prettyJSON.Bytes())
 	if err != nil {
-		log.Print("failed to write trace data")
+		serverLogger.Error().Msgf("failed to send trace data: %v", err)
 	}
 }
 
@@ -278,9 +286,17 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	var metricBuilder strings.Builder
 
 	uptime := time.Since(s.startTime)
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.process.uptime: %s</p>", uptime))
+	metricBuilder.WriteString(fmt.Sprintf("<p>blog.uptime: %s</p>", uptime))
 
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", s.lts.articlesServed.Load()))
+	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
+	for art := range s.lts.servedCountPerArticle {
+		orderedKeys = append(orderedKeys, art)
+	}
+	sort.Strings(orderedKeys)
+	for _, aname := range orderedKeys {
+		metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served.%s: %d</p>", aname, s.lts.servedCountPerArticle[aname].Load()))
+	}
 
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p50: %d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p90: %d</p>", s.lts.reqDur90.Load()))
@@ -306,6 +322,6 @@ func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {
 	feedContent := s.bm.GetRssFeed()
 	_, err := w.Write(feedContent)
 	if err != nil {
-		log.Printf("failed to write rss feed %v", err)
+		serverLogger.Error().Msgf("failed tp send rss feed to client: %v", err)
 	}
 }

@@ -67,11 +67,11 @@ func (bm *BlogManager) ListenForUpdates(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-sighup:
-				log.Printf("SIGHUP recieived updating content")
+				managerLogger.Info().Msg("SIGHUP recieived")
 				bm.TriggerUpdate()
 			case <-bm.updateChan:
 				if err := bm.updateContent(); err != nil {
-					log.Printf("update failed: %v", err)
+					managerLogger.Error().Msgf("update failed: %v", err)
 				}
 			}
 		}
@@ -81,9 +81,10 @@ func (bm *BlogManager) ListenForUpdates(ctx context.Context) {
 func (bm *BlogManager) TriggerUpdate() {
 	select {
 	case bm.updateChan <- struct{}{}:
-		log.Printf("update triggered")
+		managerLogger.Info().Msg("content update triggered")
 	default:
-		log.Printf("update already pending, skipping...")
+		managerLogger.Info().Msg("content update triggered")
+		managerLogger.Warn().Msg("skipping content update: content update already pending")
 	}
 }
 
@@ -150,13 +151,14 @@ func (bm *BlogManager) updateContent() error {
 
 		lastModified, err := getFileLastModified(bm.Config, filepath.Base(file))
 		if err != nil {
-			log.Printf("Error processing last modified date for %s: %v", fileName, err)
+			managerLogger.Error().Str("file", fileName).Msgf("failed to process article last modified date: %v", err)
 			continue
 		}
 
 		fileContent, err := markdownToHtml(file, bm.Config.IMAGECACHE)
 		if err != nil {
 			log.Printf("Error processing %s: %v", fileName, err)
+			managerLogger.Error().Msgf("failed to convert markdown to html: %v", err)
 			continue
 		}
 		html := fmt.Sprintf(artTmpl, headerTitle, fileContent)
@@ -213,6 +215,6 @@ func (bm *BlogManager) updateContent() error {
 	bm.RSSFeed = []byte(rssBuilder.String())
 	bm.articleMutex.Unlock()
 
-	log.Printf("content updated successfully: loaded %d articles", len(newArticles))
+	managerLogger.Info().Msgf("content update succedeed: loaded %d articles", len(newArticles))
 	return nil
 }

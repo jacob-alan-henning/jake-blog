@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -13,38 +15,76 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
-// MetricsExporter handles metrics export
 type MetricsExporter struct {
 	localTem *LocalTelemetryStorage
 }
 
-func (e *MetricsExporter) Temporality(_ metric.InstrumentKind) metricdata.Temporality {
-	return metric.DefaultTemporalitySelector(metric.InstrumentKindCounter)
+func (e *MetricsExporter) Temporality(kind metric.InstrumentKind) metricdata.Temporality {
+	return metric.DefaultTemporalitySelector(kind)
 }
 
-func (e *MetricsExporter) Aggregation(_ metric.InstrumentKind) metric.Aggregation {
-	return metric.DefaultAggregationSelector(metric.InstrumentKindCounter)
+func (e *MetricsExporter) Aggregation(kind metric.InstrumentKind) metric.Aggregation {
+	return metric.DefaultAggregationSelector(kind)
 }
 
-func (e *MetricsExporter) ForceFlush(context.Context) error {
+func (e *MetricsExporter) ForceFlush(ctx context.Context) error {
 	return nil
 }
 
-// Export implements the metrics exporter interface
 func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.ResourceMetrics) error {
 	for _, scopeMetrics := range metrics.ScopeMetrics {
 		for _, m := range scopeMetrics.Metrics {
 			switch data := m.Data.(type) {
 			case metricdata.Gauge[int64]:
 				for _, point := range data.DataPoints {
-					e.localTem.UpdateMetricFromName(m.Name, point.Value)
+					switch m.Name {
+					case "goroutine.count":
+						e.localTem.numGoRo.Store(point.Value)
+					case "blog.heap.alloc.bytes":
+						e.localTem.heapAlloc.Store(point.Value)
+					case "blog.stack.alloc.bytes":
+						e.localTem.stackAlloc.Store(point.Value)
+					}
 				}
 			case metricdata.Sum[int64]:
 				for _, point := range data.DataPoints {
-					e.localTem.UpdateMetricFromName(m.Name, point.Value)
+					switch m.Name {
+					case "articles.served":
+						attr, found := point.Attributes.Value(attribute.Key("article"))
+						if found {
+							arty := attr.AsString()
+							e.localTem.ValidateArticleAttr(arty)
+							e.localTem.servedCountPerArticle[arty].Store(point.Value)
+						} else {
+							e.localTem.articlesServed.Store(point.Value)
+						}
+					}
 				}
 			case metricdata.Histogram[float64]:
-				e.localTem.UpdateHistogramMetricFromName(m.Name, data.DataPoints)
+				switch m.Name {
+				case "http.server.request.duration":
+					for _, bucket := range e.localTem.reqDurBuckets {
+						bucket.Store(0)
+					}
+					e.localTem.reqDurTotalCount.Store(0)
+
+					for _, point := range data.DataPoints {
+						e.localTem.reqDurTotalCount.Add(int64(point.Count))
+
+						for i, bval := range point.Bounds {
+							if i < len(point.BucketCounts) {
+								bvalMs := int(bval * 1000)
+								bucket := e.localTem.reqDurBuckets[bvalMs]
+								if bucket != nil {
+									bucket.Add(int64(point.BucketCounts[i]))
+								} else {
+									telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")
+								}
+							}
+						}
+					}
+					go e.localTem.UpdateServerFreqHistogram()
+				}
 			}
 		}
 	}
@@ -76,43 +116,51 @@ func (bs *BlogServer) InstallExportPipeline(ctx context.Context) error {
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
 		semconv.ServiceNameKey.String("jake-blog"),
+		attribute.String("env", bs.bm.Config.Env),
 	)
 
-	// Create separate exporters for traces and metrics
-	metricsExporter := &MetricsExporter{localTem: bs.telem}
 	tracesExporter := &TracesExporter{localTem: bs.telem}
-
-	// Set up trace provider
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSpanProcessor(
 			sdktrace.NewSimpleSpanProcessor(tracesExporter),
 		),
 		sdktrace.WithResource(res),
 	)
+	otel.SetTracerProvider(tracerProvider)
 
+	metricsExporter := &MetricsExporter{localTem: bs.telem}
 	reader := metric.NewPeriodicReader(
 		metricsExporter,
 		metric.WithInterval(time.Second*5),
 	)
 
-	views := []metric.View{
-		metric.NewView(metric.Instrument{Kind: metric.InstrumentKindGauge},
-			metric.Stream{Aggregation: metric.AggregationLastValue{}}),
-		metric.NewView(metric.Instrument{Kind: metric.InstrumentKindHistogram},
-			metric.Stream{Aggregation: metric.AggregationExplicitBucketHistogram{
-				Boundaries: []float64{1, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000},
-			}}),
+	if bs.bm.Config.ExportMetrics {
+		vectorExporter, err := otlpmetricgrpc.New(ctx,
+			otlpmetricgrpc.WithEndpoint(bs.bm.Config.MetricOTLP),
+			otlpmetricgrpc.WithInsecure(),
+		)
+		if err != nil {
+			telemLogger.Fatal().Msgf("failed to start vector metric exporter: %v", err)
+		}
+		vectorReader := metric.NewPeriodicReader(
+			vectorExporter,
+			metric.WithInterval(time.Second*10),
+		)
+		meterProvider := metric.NewMeterProvider(
+			metric.WithResource(res),
+			metric.WithReader(reader),
+			metric.WithReader(vectorReader),
+		)
+
+		otel.SetMeterProvider(meterProvider)
+	} else {
+		meterProvider := metric.NewMeterProvider(
+			metric.WithResource(res),
+			metric.WithReader(reader),
+		)
+
+		otel.SetMeterProvider(meterProvider)
 	}
-
-	meterProvider := metric.NewMeterProvider(
-		metric.WithResource(res),
-		metric.WithReader(reader),
-		metric.WithView(views...),
-	)
-
-	// Set global providers
-	otel.SetTracerProvider(tracerProvider)
-	otel.SetMeterProvider(meterProvider)
 
 	return nil
 }

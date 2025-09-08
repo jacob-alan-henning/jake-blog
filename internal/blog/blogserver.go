@@ -3,9 +3,9 @@ package blog
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 	"time"
 )
@@ -26,7 +26,9 @@ type BlogServerOption func(*BlogServer) error
 
 func WithConfig(envPrefix string) BlogServerOption {
 	return func(bs *BlogServer) error {
-		cfg, err := NewConfig(WithEnvironment(envPrefix))
+		cfg, err := NewConfig(
+			WithEnvironment(envPrefix),
+		)
 		if err != nil {
 			return fmt.Errorf("config creation failed: %w", err)
 		}
@@ -93,7 +95,7 @@ func (bs *BlogServer) Start() error {
 
 func (bs *BlogServer) run() error {
 	sig := <-bs.sigChan
-	log.Printf("Received signal %s, initiating shutdown...", sig)
+	blogLogger.Info().Msgf("recieved shutdown signal %v", sig)
 	return bs.shutdown()
 }
 
@@ -108,7 +110,6 @@ func (bs *BlogServer) shutdown() error {
 	return nil
 }
 
-// I want to encapsulate starting the blog server so I can do runtime config from env vars
 func StartBlogServer() error {
 	bs, err := NewBlogServer(
 		WithConfig("BLOG_"),
@@ -117,9 +118,25 @@ func StartBlogServer() error {
 		return err
 	}
 
-	err = bs.Start()
-	if err != nil {
-		return err
+	if bs.cfg.ProfileFlag {
+		blogLogger.Info().Msg("profiling enabled")
+		f, err := os.Create(bs.cfg.ProfilePath)
+		if err != nil {
+			blogLogger.Fatal().Msgf("failed to open profiling report: %v", err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+		err = bs.Start()
+		if err != nil {
+			return err
+		}
+	} else {
+		blogLogger.Info().Msg("profiling disabled")
+		err = bs.Start()
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }

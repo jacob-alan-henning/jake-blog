@@ -1,0 +1,35 @@
+api:
+  enabled: true
+  address: "0.0.0.0:8686"
+
+sources:
+  blog_logs: 
+    type: file 
+    include:
+      - /tmp/logs/blog.log
+  otel_metrics:
+    type: "opentelemetry"
+    grpc:
+      address: "0.0.0.0:4317"
+    http:
+      address: "0.0.0.0:4318"
+
+sinks:
+  stdout_metrics:
+    type: "console"
+    inputs: ["otel_metrics.metrics"]
+    target: "stdout"
+    encoding:
+      codec: "json"
+      pretty: true
+  #cloudwatch_metrics:
+  #  type: "aws_cloudwatch_metrics"
+  #  inputs: ["otel_metrics.metrics"]
+  #  namespace: "jakeblog"
+  #  region: "us-east-1"
+  #cloudwatch_logs:
+  #  type: "aws_cloudwatch_logs"
+  #  inputs: [blog_logs]
+  #  group_name: jakeblog
+  #  stream_name: {{host}}
+

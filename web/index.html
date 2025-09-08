@@ -36,18 +36,32 @@
 
     <div id="tab2" class="tab-content">
         <h2>Metrics</h2>
+        <h3>filter: {this.process}</h3>
+        <h3>filter: since:{this.process.start}</h3>
+
         <ul id="metrics-list" hx-get="/telemetry/metric" hx-trigger="load, every 10s" hx-swap="innerHTML">
             <li>Loading...</li>
         </ul>  
 
-        <h2>Tracing</h2>
-        <p>Last trace processed by the blog</p>
-        <div class="json-display">
-            <pre hx-get="/telemetry/trace" 
-                 hx-swap="innerHTML" 
-                 hx-trigger="load" 
-                 class="json-viewer">Waiting for traces...</pre>
-        </div>
+  <h2>Tracing</h2>      
+        <h3>filter: {tail.n.1}</h3>
+<p>
+  <a href="#"
+     class="refresh-link"
+     hx-get="/telemetry/trace"
+     hx-target="#trace-block"
+     hx-swap="innerHTML">
+     refresh
+  </a>
+</p>
+
+<div class="json-display">
+  <pre id="trace-block"
+       hx-get="/telemetry/trace"
+       hx-swap="innerHTML"
+       hx-trigger="load"
+       class="json-viewer">Waiting for traces...</pre>
+</div>
     </div>
 
     <div id="tab3" class="tab-content">

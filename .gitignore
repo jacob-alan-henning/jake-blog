@@ -8,3 +8,4 @@ deployments/local/local-certs
 summary.json 
 summary.txt
 *.prof 
+*.log

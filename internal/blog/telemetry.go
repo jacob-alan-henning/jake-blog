@@ -3,7 +3,6 @@ package blog
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"math"
 	"runtime"
 	"sync"
@@ -12,106 +11,114 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 type LocalTelemetryStorage struct {
-	latestSpan     tracetest.SpanStub
-	reqDur99       atomic.Int64
-	reqDur95       atomic.Int64
-	reqDur90       atomic.Int64
-	reqDur50       atomic.Int64
-	articlesServed atomic.Int64
-	numGoRo        atomic.Int64
-	heapAlloc      atomic.Int64
-	stackAlloc     atomic.Int64
-	spanMu         sync.RWMutex
-	spanChan       chan tracetest.SpanStub
+	latestSpan            tracetest.SpanStub
+	reqDurTotalCount      atomic.Int64
+	reqDurBuckets         map[int]*atomic.Int64
+	reqDur99              atomic.Int64
+	reqDur95              atomic.Int64
+	reqDur90              atomic.Int64
+	reqDur50              atomic.Int64
+	reqFreqBound          []int
+	articlesServed        atomic.Int64
+	servedCountPerArticle map[string]*atomic.Int64 // ["articlename"].Load()
+	numGoRo               atomic.Int64
+	heapAlloc             atomic.Int64
+	stackAlloc            atomic.Int64
+	spanMu                sync.RWMutex
+	spanChan              chan tracetest.SpanStub
 }
 
 func NewLocalTelemetryStorage() *LocalTelemetryStorage {
-	storage := &LocalTelemetryStorage{
-		spanChan: make(chan tracetest.SpanStub, 10),
+	boundaries := []int{5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}
+	bcounts := make(map[int]*atomic.Int64, 15)
+	for _, bounds := range boundaries {
+		bcounts[bounds] = &atomic.Int64{}
+		bcounts[bounds].Store(0)
 	}
-	return storage
-}
-
-// synchronous gauge/sum instruments
-func (lts *LocalTelemetryStorage) UpdateMetricFromName(name string, val int64) {
-	switch name {
-	case "goroutine.count":
-		lts.numGoRo.Store(val)
-	case "articles.served":
-		lts.articlesServed.Store(val)
-	case "blog.heap.alloc.bytes":
-		lts.heapAlloc.Store(val)
-	case "blog.stack.alloc.bytes":
-		lts.stackAlloc.Store(val)
+	return &LocalTelemetryStorage{
+		servedCountPerArticle: make(map[string]*atomic.Int64, 0),
+		spanChan:              make(chan tracetest.SpanStub, 10),
+		reqDurBuckets:         bcounts,
+		reqFreqBound:          boundaries,
 	}
 }
 
-// store histogram metrics
-func (lts *LocalTelemetryStorage) UpdateHistogramMetricFromName(name string, vals []metricdata.HistogramDataPoint[float64]) {
-	switch name {
-	case "http.server.duration":
-		for _, val := range vals {
-			p50, valid := lts.calculatePercentile(val, 0.5)
-			if valid {
-				lts.reqDur50.Store(int64(p50))
-			}
-			p90, valid := lts.calculatePercentile(val, 0.9)
-			if valid {
-				lts.reqDur90.Store(int64(p90))
-			}
-			p95, valid := lts.calculatePercentile(val, 0.95)
-			if valid {
-				lts.reqDur95.Store(int64(p95))
-			}
-			p99, valid := lts.calculatePercentile(val, 0.99)
-			if valid {
-				lts.reqDur99.Store(int64(p99))
-			}
+// have to do this because article names can change during process runtime
+func (lts *LocalTelemetryStorage) ValidateArticleAttr(artName string) {
+	_, found := lts.servedCountPerArticle[artName]
+	if !found {
+		lts.servedCountPerArticle[artName] = &atomic.Int64{}
+		lts.servedCountPerArticle[artName].Store(0)
+	}
+}
+
+func (lts *LocalTelemetryStorage) UpdateServerFreqHistogram() {
+	p50, err := lts.calcPercentile(50)
+	if err != nil {
+		telemLogger.Warn().Msgf("unable to calculate p50 for req freq: %v", err)
+	} else {
+		lts.reqDur50.Store(p50)
+	}
+
+	p90, err := lts.calcPercentile(90)
+	if err != nil {
+		telemLogger.Warn().Msgf("unable to calculate p90 for req freq: %v", err)
+	} else {
+		lts.reqDur90.Store(p90)
+	}
+	p95, err := lts.calcPercentile(95)
+	if err != nil {
+		telemLogger.Warn().Msgf("unable to calculate p95 for req freq: %v", err)
+	} else {
+		lts.reqDur95.Store(p95)
+	}
+	p99, err := lts.calcPercentile(99)
+	if err != nil {
+		telemLogger.Warn().Msgf("unable to calculate p99 for req freq: %v", err)
+	} else {
+		lts.reqDur99.Store(p99)
+	}
+}
+
+func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error) {
+	totalCount := lts.reqDurTotalCount.Load()
+	if totalCount == 0 {
+		return 0, nil
+	}
+
+	targetCount := (totalCount * percentile) / 100
+	var runningCount int64 = 0
+	previousBound := 0
+
+	for _, boundary := range lts.reqFreqBound {
+		bucket := lts.reqDurBuckets[boundary]
+		if bucket == nil {
+			continue
 		}
-	}
-}
 
-func (lts *LocalTelemetryStorage) calculatePercentile(histogramData metricdata.HistogramDataPoint[float64], percentile float64) (float64, bool) {
-	if histogramData.Count == 0 {
-		return 0, false
-	}
-	// figure out the number of points needed to "reach" a percentile
-	targetCount := uint64(float64(histogramData.Count) * percentile)
-	var runningCount uint64 = 0
-
-	// iterate through the datapoints until we find the bucket that has the percentile
-	// provide best guess on exact num
-	for index, count := range histogramData.BucketCounts {
+		count := bucket.Load()
 		runningCount += count
 
 		if runningCount >= targetCount {
-			if index == 0 {
-				return histogramData.Bounds[0] / 2, true
+			positionInBucket := targetCount - (runningCount - count)
+
+			if count > 0 {
+				fraction := float64(positionInBucket) / float64(count)
+				lowerBound := float64(previousBound)
+				upperBound := float64(boundary)
+				result := lowerBound + fraction*(upperBound-lowerBound)
+				return int64(result), nil
 			}
-
-			if index < len(histogramData.Bounds) {
-				lowerBound := histogramData.Bounds[index-1]
-				upperBound := histogramData.Bounds[index]
-
-				// Calculate how far into this bucket our percentile falls
-				bucketCount := count
-				positionInBucket := targetCount - (runningCount - bucketCount)
-				fraction := float64(positionInBucket) / float64(bucketCount)
-
-				return lowerBound + fraction*(upperBound-lowerBound), true
-			}
-
-			// This is not super accurate
-			lastBound := histogramData.Bounds[len(histogramData.Bounds)-1]
-			return lastBound * 1.5, true
+			return int64(boundary), nil
 		}
+		previousBound = boundary
 	}
-	return histogramData.Max.Value()
+
+	return int64(lts.reqFreqBound[len(lts.reqFreqBound)-1]), nil
 }
 
 func (lts *LocalTelemetryStorage) Start(ctx context.Context) error {
@@ -138,7 +145,7 @@ func runtimeMetricLoop(ctx context.Context) {
 		metric.WithDescription("number of goroutines"),
 		metric.WithUnit("goroutines"))
 	if err != nil {
-		log.Printf("failed to initialize runtime metrics %v", err)
+		telemLogger.Error().Msgf("failed to init runtime metrics: %v", err)
 		return
 	}
 
@@ -146,7 +153,7 @@ func runtimeMetricLoop(ctx context.Context) {
 		metric.WithDescription("bytes allocated to the heap by the blog"),
 		metric.WithUnit("bytes"))
 	if err != nil {
-		log.Printf("failed to initialize runtime metrics %v", err)
+		telemLogger.Error().Msgf("failed to init runtime metrics: %v", err)
 		return
 	}
 
@@ -154,7 +161,7 @@ func runtimeMetricLoop(ctx context.Context) {
 		metric.WithDescription("bytes allocated to the stack by the blog"),
 		metric.WithUnit("bytes"))
 	if err != nil {
-		log.Printf("failed to initialize runtime metrics %v", err)
+		telemLogger.Error().Msgf("failed to init runtime metrics: %v", err)
 		return
 	}
 
@@ -175,7 +182,7 @@ func runtimeMetricLoop(ctx context.Context) {
 			var stackAllocInt64 int64
 
 			if stackAlloc >= uint64(math.MaxInt64) {
-				log.Print("gosec was right and i am an idiot")
+				telemLogger.Error().Msg("failed to export stack size")
 				stackAllocInt64 = math.MaxInt64
 			} else {
 				stackAllocInt64 = int64(stackAlloc)
@@ -184,7 +191,7 @@ func runtimeMetricLoop(ctx context.Context) {
 			goStackAlloc.Record(ctx, stackAllocInt64)
 
 			if heapAlloc >= uint64(math.MaxInt64) {
-				log.Print("gosec was right and i am an idiot")
+				telemLogger.Error().Msg("failed to export heap size")
 				heapAllocInt64 = math.MaxInt64
 			} else {
 				heapAllocInt64 = int64(heapAlloc)
@@ -200,7 +207,7 @@ func (lts *LocalTelemetryStorage) Write(span tracetest.SpanStub) {
 	select {
 	case lts.spanChan <- span:
 	default:
-		log.Printf("dropping span %s due to full bufer", span.SpanContext.SpanID().String())
+		telemLogger.Warn().Msgf("dropping span %s: full buffer", span.SpanContext.SpanID().String())
 	}
 }
 

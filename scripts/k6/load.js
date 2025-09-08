@@ -93,6 +93,9 @@ export default function() {
     `${baseUrl}/`,                    // Static files
     `${baseUrl}/content/`,            // Article list
     `${baseUrl}/article/otel`,        // Single article
+    `${baseUrl}/article/wif`,
+     `${baseUrl}/article/river`,
+    `${baseUrl}/article/fish1`, 
     `${baseUrl}/feed/`,               // RSS feed
   ];
 

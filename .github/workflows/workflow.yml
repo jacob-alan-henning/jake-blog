@@ -132,6 +132,7 @@ jobs:
           BLOG_REPO_PASS: ${{ secrets.BLOG_REPO_PASS }}
           BLOG_REPO_PRIV_KEY: ${{ secrets.BLOG_REPO_PRIV_KEY }}
           DNS_DOMAIN: staging.jake-henning.com
+          BLOG_ENVMNT: staging
           ANSIBLE_LIGHTSAIL_PREFIX: staging-jake
         run: ansible-playbook site.yml --tags common
 
@@ -257,6 +258,7 @@ jobs:
           BLOG_REPO_PASS: ${{ secrets.BLOG_REPO_PASS }}
           BLOG_REPO_PRIV_KEY: ${{ secrets.BLOG_REPO_PRIV_KEY }}
           DNS_DOMAIN: jake-henning.com
+          BLOG_ENVMNT: prod
         run: ansible-playbook site.yml --tags common
 
   smoke-test:

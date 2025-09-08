@@ -1,32 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"jakeblog/internal/blog"
-	"log"
-	"os"
-	"runtime/pprof"
 )
 
 func main() {
-	if blog.CheckAnonEnvironmentalFlag("ENABLE_PROFILING") {
-		log.Print("starting blog with profiling enabled")
-		f, err := os.Create(blog.CheckAnonEnvironmental("PROFILING_REPORT"))
-		if err != nil {
-			log.Fatal(err)
-		}
+	initZLOG(INFO)
 
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-
-		err = blog.StartBlogServer()
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		log.Print("starting blog with profiling disabled")
-		err := blog.StartBlogServer()
-		if err != nil {
-			log.Fatal(err)
-		}
+	err := blog.StartBlogServer()
+	if err != nil {
+		initLogMSG(ERROR, fmt.Sprintf("blogserver stopped with error: %v", err))
 	}
 }

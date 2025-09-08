@@ -3,7 +3,6 @@ package blog
 import (
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -73,25 +72,26 @@ func getFileLastModified(cfg *Config, filePath string) (time.Time, error) {
 
 func FetchMarkdownRepo(cfg *Config) error {
 	if cfg.LocalOnly {
-		log.Printf("localOnly repository: %t", true)
+		mdLogger.Info().Msg("content repository is set to LocalOnly")
 		return nil
 	}
 
 	sshAuth, err := ssh.NewPublicKeysFromFile("git", cfg.KeyPrivPath, cfg.RepoPass)
 	if err != nil {
-		fmt.Fprintf(os.Stdout, "error loading SSH keys: %v\n", err)
+		mdLogger.Error().Msgf("error loading SSH keys: %v", err)
 
 		return err
 	}
 
-	repo, err := git.PlainClone(cfg.ContentDir, false, &git.CloneOptions{
+	_, err = git.PlainClone(cfg.ContentDir, false, &git.CloneOptions{
 		URL:           cfg.RepoURL,
 		ReferenceName: plumbing.ReferenceName("refs/heads/main"),
 		Auth:          sshAuth,
 	})
 	if err != nil {
 		if err == git.ErrRepositoryAlreadyExists {
-			log.Println("repo already exists, opening and pulling latest changes")
+			mdLogger.Info().Msg("repo exists localy")
+			mdLogger.Info().Msg("opening and pulling latest changes from content repo")
 
 			repo, err := git.PlainOpen(cfg.ContentDir)
 			if err != nil {
@@ -108,14 +108,15 @@ func FetchMarkdownRepo(cfg *Config) error {
 			})
 			if err != nil && err != git.NoErrAlreadyUpToDate {
 				log.Printf("failed to pull repo: %v", err)
+				mdLogger.Error().Msgf("failed to pull repo: %v", err)
 				return err
 			}
 
 		} else {
-			log.Printf("error cloning repository: %v", err)
+			mdLogger.Error().Msgf("error cloning repo: %v", err)
 			return err
 		}
 	}
-	log.Printf("repository cloned successfully: %v\n", repo)
+	mdLogger.Info().Msg("repo cloned successfully")
 	return nil
 }

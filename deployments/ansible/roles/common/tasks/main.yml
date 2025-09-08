@@ -49,6 +49,8 @@
         registry: " {{ lookup('env','REGISTRY') }} "
         repository: "{{ lookup('env','REPOSITORY') }}"
         dns_domain: "{{ lookup('env','DNS_DOMAIN') }}"
+        blog_env: "{{ lookup('env','BLOG_ENVMNT') }}"
+
       delegate_to: localhost
 
     - name: Install deployment dependencies

@@ -1,8 +1,10 @@
-version: '3'
-
 services:
   jake-blog:
     image: jake-blog
+    restart: always
+    depends_on:
+      vector:
+        condition: service_started
     ports:
       - "0.0.0.0:443:8080"
       - "0.0.0.0:80:80"
@@ -14,7 +16,20 @@ services:
       - /Users/jake/jake-blog/deployments/local/profile:/tmp/profile
       - /Users/jake/local-certs:/etc/letsencrypt
       - /Users/jake/blogs:/tmp/content
-
+      - /Users/jake/jake-blog/deployments/local/logs:/tmp/logs
+  vector:
+    image: timberio/vector:0.49.0-alpine
+    ports: 
+      - "4317:4317"
+      - "4318:4318"
+      - "8686:8686"
+    networks:
+      - monitoring-network
+    env_file:
+      - vector.env
+    volumes:
+      - /Users/jake/jake-blog/deployments/local/vector.yml:/etc/vector/vector.yaml:ro
+      - /Users/jake/jake-blog/deployments/local/logs:/tmp/logs:ro
 networks:
   monitoring-network:
     driver: bridge
