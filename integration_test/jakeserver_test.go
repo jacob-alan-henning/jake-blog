@@ -54,6 +54,7 @@ This is a test article's content.`
 	os.Setenv("TEST_REPO_URL", "dummy-url")
 	os.Setenv("TEST_REPO_PRIV_KEY", "dummy-key")
 	os.Setenv("TEST_REPO_PRIV_KEY_PATH", keyPath)
+	os.Setenv("TEST_ENVMNT", "test")
 
 	defer func() {
 		os.Unsetenv("TEST_LOCAL_ONLY")
@@ -62,6 +63,7 @@ This is a test article's content.`
 		os.Unsetenv("TEST_REPO_URL")
 		os.Unsetenv("TEST_REPO_PRIV_KEY")
 		os.Unsetenv("TEST_REPO_PRIV_KEY_PATH")
+		os.Unsetenv("TEST_ENVMNT")
 	}()
 
 	_, cancel := context.WithCancel(context.Background())

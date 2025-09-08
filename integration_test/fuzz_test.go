@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"jakeblog/internal/blog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,8 +12,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"jakeblog/internal/blog"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,6 +43,7 @@ This is a test article's content.`
 		os.Setenv("TEST_REPO_URL", "dummy-url")
 		os.Setenv("TEST_REPO_PRIV_KEY", "dummy-key")
 		os.Setenv("TEST_REPO_PRIV_KEY_PATH", keyPath)
+		os.Setenv("TEST_ENVMNT", "test")
 
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -66,6 +66,7 @@ This is a test article's content.`
 			os.Unsetenv("TEST_REPO_URL")
 			os.Unsetenv("TEST_REPO_PRIV_KEY")
 			os.Unsetenv("TEST_REPO_PRIV_KEY_PATH")
+			os.Unsetenv("TEST_ENVMNT")
 			time.Sleep(time.Second)
 		})
 

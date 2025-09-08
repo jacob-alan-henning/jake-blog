@@ -124,7 +124,10 @@ func StartBlogServer() error {
 		if err != nil {
 			blogLogger.Fatal().Msgf("failed to open profiling report: %v", err)
 		}
-		pprof.StartCPUProfile(f)
+		err = pprof.StartCPUProfile(f)
+		if err != nil {
+			blogLogger.Fatal().Msgf("failed to start cpu profiling: %v", err)
+		}
 		defer pprof.StopCPUProfile()
 		err = bs.Start()
 		if err != nil {

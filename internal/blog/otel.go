@@ -2,6 +2,7 @@ package blog
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -69,14 +70,14 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 					e.localTem.reqDurTotalCount.Store(0)
 
 					for _, point := range data.DataPoints {
-						e.localTem.reqDurTotalCount.Add(int64(point.Count))
+						e.localTem.reqDurTotalCount.Add(safeUint64ToInt64(point.Count))
 
 						for i, bval := range point.Bounds {
 							if i < len(point.BucketCounts) {
 								bvalMs := int(bval * 1000)
 								bucket := e.localTem.reqDurBuckets[bvalMs]
 								if bucket != nil {
-									bucket.Add(int64(point.BucketCounts[i]))
+									bucket.Add(safeUint64ToInt64(point.BucketCounts[i]))
 								} else {
 									telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")
 								}
@@ -93,6 +94,13 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 
 func (e *MetricsExporter) Shutdown(context.Context) error {
 	return nil
+}
+
+func safeUint64ToInt64(val uint64) int64 {
+	if val > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(val)
 }
 
 // TracesExporter handles trace export
