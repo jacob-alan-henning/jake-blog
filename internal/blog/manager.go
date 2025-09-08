@@ -124,7 +124,7 @@ func (bm *BlogManager) updateContent() error {
         <html>
         <head>
             <title>%s</title>
-            <link rel="stylesheet" type="text/css" href="/static/article.css">
+            <link rel="stylesheet" type="text/css" href="/article.css">
             <link rel="icon" href="/favicon.ico" type="image/x-icon" />
         </head>
         <body>

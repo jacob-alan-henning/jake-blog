@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jacob Henning's Blog</title>
-    <link rel="stylesheet" type="text/css" href="static/styles.css">
+    <link rel="stylesheet" type="text/css" href="/styles.css">
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
 </head>
 <body>
@@ -37,7 +37,7 @@
     <div id="tab2" class="tab-content">
         <h2>Metrics</h2>
         <h3>filter: {this.process}</h3>
-        <h3>filter: since:{this.process.start}</h3>
+        <h3>since:{this.process.start}</h3>
 
         <ul id="metrics-list" hx-get="/telemetry/metric" hx-trigger="load, every 10s" hx-swap="innerHTML">
             <li>Loading...</li>
