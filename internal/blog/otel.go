@@ -64,23 +64,19 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 			case metricdata.Histogram[float64]:
 				switch m.Name {
 				case "http.server.request.duration":
-					for _, bucket := range e.localTem.reqDurBuckets {
-						bucket.Store(0)
-					}
-					e.localTem.reqDurTotalCount.Store(0)
-
 					for _, point := range data.DataPoints {
-						e.localTem.reqDurTotalCount.Add(safeUint64ToInt64(point.Count))
-
+						e.localTem.reqDurTotalCount.Store(safeUint64ToInt64(point.Count))
 						for i, bval := range point.Bounds {
 							if i < len(point.BucketCounts) {
 								bvalMs := int(bval * 1000)
 								bucket := e.localTem.reqDurBuckets[bvalMs]
 								if bucket != nil {
-									bucket.Add(safeUint64ToInt64(point.BucketCounts[i]))
+									bucket.Store(safeUint64ToInt64(point.BucketCounts[i]))
 								} else {
 									telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")
 								}
+							} else {
+								telemLogger.Warn().Msgf("invalid bucket index received from datapoint: %f", bval)
 							}
 						}
 					}

@@ -295,7 +295,12 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Strings(orderedKeys)
 	for _, aname := range orderedKeys {
-		metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served.%s: %d</p>", aname, s.lts.servedCountPerArticle[aname].Load()))
+		counter, exists := s.lts.servedCountPerArticle[aname]
+		if exists {
+			metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served.%s: %d</p>", aname, counter.Load()))
+		} else {
+			serverLogger.Warn().Msgf("could not load article freq metrics article does not exist in map %s", aname)
+		}
 	}
 
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p50: %d</p>", s.lts.reqDur50.Load()))

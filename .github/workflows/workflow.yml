@@ -24,9 +24,12 @@ jobs:
 
     - run: go install github.com/securego/gosec/v2/cmd/gosec@latest
     - run: gosec ./internal/blog
+
+    - name: unit
+      run: go test -bench=. ./internal/blog -v
         
-    - name: integration test
-      run: go test ./integration_test 
+    - name: integration
+      run: go test ./integration_test -v
 
   build:
     runs-on: ubuntu-latest
