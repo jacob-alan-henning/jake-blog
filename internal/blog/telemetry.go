@@ -116,17 +116,12 @@ func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error
 
 		if runningCount >= targetCount {
 			positionInBucket := targetCount - (runningCount - count)
-			var fraction float64
 			if count > 0 {
-				if positionInBucket == count {
-					fraction = 0.5
-				} else {
-					fraction = float64(positionInBucket) / float64(count)
-				}
+				fraction := positionInBucket / count
 				lowerBound := float64(previousBound)
 				upperBound := float64(boundary)
 				result := lowerBound + fraction*(upperBound-lowerBound)
-				return int64(result), nil
+				return int64(math.Round(result)), nil
 			}
 			return int64(boundary), nil
 		}

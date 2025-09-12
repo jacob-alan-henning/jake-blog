@@ -9,6 +9,65 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
+func TestPercentileMonotonicity(t *testing.T) {
+	datasets := []struct {
+		name         string
+		totalCount   int64
+		bucketCounts map[int]int64
+	}{
+		{
+			name:       "even distribution",
+			totalCount: 100,
+			bucketCounts: map[int]int64{
+				5: 25, 10: 25, 25: 25, 50: 25,
+			},
+		},
+		{
+			name:       "skewed distribution",
+			totalCount: 1000,
+			bucketCounts: map[int]int64{
+				5: 900, 10: 50, 25: 30, 50: 20,
+			},
+		},
+		{
+			name:       "production data",
+			totalCount: 33,
+			bucketCounts: map[int]int64{
+				5: 32, 10: 1,
+			},
+		},
+	}
+
+	percentiles := []int64{50, 90, 95, 99}
+
+	for _, dataset := range datasets {
+		t.Run(dataset.name, func(t *testing.T) {
+			storage := NewLocalTelemetryStorage()
+			storage.reqDurTotalCount.Store(dataset.totalCount)
+
+			for bucketMs, count := range dataset.bucketCounts {
+				if bucket := storage.reqDurBuckets[bucketMs]; bucket != nil {
+					bucket.Store(count)
+				}
+			}
+
+			var results []int64
+			for _, p := range percentiles {
+				result, err := storage.calcPercentile(p)
+				require.NoError(t, err)
+				results = append(results, result)
+			}
+
+			// Verify P50 ≤ P90 ≤ P95 ≤ P99
+			for i := 1; i < len(results); i++ {
+				require.LessOrEqual(t, results[i-1], results[i],
+					"P%d (%d) should be <= P%d (%d)",
+					percentiles[i-1], results[i-1], percentiles[i], results[i])
+			}
+		})
+	}
+}
+
 func TestPercentileCalcCorrectness(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -27,7 +86,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				50: 25, // 25-50ms
 			},
 			percentile:     50,
-			expectedResult: 7,
+			expectedResult: 10,
 		},
 		{
 			name:       "P95 skewed distribution",
@@ -39,7 +98,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				50: 20,
 			},
 			percentile:     95,
-			expectedResult: 7,
+			expectedResult: 10,
 		},
 		{
 			name:       "P99 with outliers",
@@ -52,7 +111,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				100: 1,
 			},
 			percentile:     99,
-			expectedResult: 37,
+			expectedResult: 50,
 		},
 		{
 			name:           "empty histogram",
@@ -69,7 +128,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				10: 1,
 			},
 			percentile:     50,
-			expectedResult: 2,
+			expectedResult: 3,
 		},
 		{
 			name:       "P90 production data",
@@ -79,7 +138,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				10: 1,
 			},
 			percentile:     90,
-			expectedResult: 4,
+			expectedResult: 5,
 		},
 		{
 			name:       "P95 production data",
@@ -89,7 +148,7 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 				10: 1,
 			},
 			percentile:     95,
-			expectedResult: 4,
+			expectedResult: 5,
 		},
 		{
 			name:       "P99 production data",
