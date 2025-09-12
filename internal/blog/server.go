@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -292,7 +293,10 @@ func (s *Server) makeMetricSnippet() *string {
 	metricBuilder.WriteString(uptime.String())
 	metricBuilder.WriteString("</p>")
 
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", s.lts.articlesServed.Load()))
+	metricBuilder.WriteString("<p>blog.articles.served: ") //%d</p>", s.lts.articlesServed.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.articlesServed.Load())))
+	metricBuilder.WriteString("</p>")
+
 	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
 	for art := range s.lts.servedCountPerArticle {
 		orderedKeys = append(orderedKeys, art)
@@ -301,22 +305,43 @@ func (s *Server) makeMetricSnippet() *string {
 	for _, aname := range orderedKeys {
 		counter, exists := s.lts.servedCountPerArticle[aname]
 		if exists {
-			metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served.%s: %d</p>", aname, counter.Load()))
+			metricBuilder.WriteString("<p>blog.articles.served.") //%s: %d</p>", aname, counter.Load()))
+			metricBuilder.WriteString(aname)
+			metricBuilder.WriteString(": ")
+			metricBuilder.WriteString(strconv.Itoa(int(counter.Load())))
+			metricBuilder.WriteString("</p>")
 		} else {
 			serverLogger.Warn().Msgf("could not load article freq metrics article does not exist in map %s", aname)
 		}
 	}
 
 	metricBuilder.WriteString("<p>blog.server.request.ms.p50: ") //%d</p>", s.lts.reqDur50.Load()))
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p90: %d</p>", s.lts.reqDur90.Load()))
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p95: %d</p>", s.lts.reqDur95.Load()))
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p99: %d</p>", s.lts.reqDur99.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur50.Load())))
+	metricBuilder.WriteString("</p>")
 
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.goroutine.count: %d</p>", s.lts.numGoRo.Load()))
+	metricBuilder.WriteString("<p>blog.server.request.ms.p90: ") //%d</p>", s.lts.reqDur50.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur90.Load())))
+	metricBuilder.WriteString("</p>")
 
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.heap.alloc.bytes: %d</p>", s.lts.heapAlloc.Load()))
+	metricBuilder.WriteString("<p>blog.server.request.ms.p95: ") //%d</p>", s.lts.reqDur50.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur95.Load())))
+	metricBuilder.WriteString("</p>")
 
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.stack.alloc.bytes: %d</p>", s.lts.stackAlloc.Load()))
+	metricBuilder.WriteString("<p>blog.server.request.ms.p99: ") //%d</p>", s.lts.reqDur50.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur99.Load())))
+	metricBuilder.WriteString("</p>")
+
+	metricBuilder.WriteString("<p>blog.goroutine.count: ") //%d</p>", s.lts.numGoRo.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.numGoRo.Load())))
+	metricBuilder.WriteString("</p>")
+
+	metricBuilder.WriteString("<p>blog.heap.alloc.bytes: ") //%d</p>", s.lts.numGoRo.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.heapAlloc.Load())))
+	metricBuilder.WriteString("</p>")
+
+	metricBuilder.WriteString("<p>blog.stack.alloc.bytes: ") //%d</p>", s.lts.numGoRo.Load()))
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.stackAlloc.Load())))
+	metricBuilder.WriteString("</p>")
 
 	buf := make([]byte, 0, 19)
 	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")

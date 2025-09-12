@@ -124,6 +124,30 @@ This is a test article's content.`
 			expectedBody:   "blog.articles.served: 0",
 		},
 		{
+			name:           "metrics endpoint p50", // verify correct response from metrics endpoint
+			path:           "/telemetry/metric",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "<p>blog.server.request.ms.p50:",
+		},
+		{
+			name:           "metrics endpoint p90", // verify correct response from metrics endpoint
+			path:           "/telemetry/metric",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "<p>blog.server.request.ms.p90:",
+		},
+		{
+			name:           "metrics endpoint p95", // verify correct response from metrics endpoint
+			path:           "/telemetry/metric",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "<p>blog.server.request.ms.p95:",
+		},
+		{
+			name:           "metrics endpoint p99", // verify correct response from metrics endpoint
+			path:           "/telemetry/metric",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "<p>blog.server.request.ms.p99:",
+		},
+		{
 			name:           "article content", // verify correct response from real article
 			path:           "/article/test",
 			expectedStatus: http.StatusOK,
