@@ -332,7 +332,6 @@
         state: stopped
         enabled: false 
       loop:
-        - fwupd
         - ModemManager
         - udisks2
         - snap.certbot.renew

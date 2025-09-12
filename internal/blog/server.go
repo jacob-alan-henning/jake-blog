@@ -280,13 +280,17 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
+/*
+* NOTE: seperating the snippet creation from handler to make it easier to test
+ */
+func (s *Server) makeMetricSnippet() *string {
 	var metricBuilder strings.Builder
+	metricBuilder.Grow(800)
 
 	uptime := time.Since(s.startTime)
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.uptime: %s</p>", uptime))
+	metricBuilder.WriteString("<p>blog.uptime: ")
+	metricBuilder.WriteString(uptime.String())
+	metricBuilder.WriteString("</p>")
 
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.articles.served: %d</p>", s.lts.articlesServed.Load()))
 	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
@@ -303,7 +307,7 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p50: %d</p>", s.lts.reqDur50.Load()))
+	metricBuilder.WriteString("<p>blog.server.request.ms.p50: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p90: %d</p>", s.lts.reqDur90.Load()))
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p95: %d</p>", s.lts.reqDur95.Load()))
 	metricBuilder.WriteString(fmt.Sprintf("<p>blog.server.request.ms.p99: %d</p>", s.lts.reqDur99.Load()))
@@ -317,9 +321,17 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	buf := make([]byte, 0, 19)
 	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")
 	dtStr := string(buf)
-	metricBuilder.WriteString(fmt.Sprintf("<p>Last Updated: %s</p>", dtStr))
+	metricBuilder.WriteString("<p>Last Updated: ")
+	metricBuilder.WriteString(dtStr)
+	metricBuilder.WriteString("</p>")
+	completed := metricBuilder.String()
+	return &completed
+}
 
-	fmt.Fprint(w, metricBuilder.String())
+func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	fmt.Fprint(w, *s.makeMetricSnippet())
 }
 
 func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {

@@ -64,23 +64,22 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 			case metricdata.Histogram[float64]:
 				switch m.Name {
 				case "http.server.request.duration":
-					for _, point := range data.DataPoints {
-						e.localTem.reqDurTotalCount.Store(safeUint64ToInt64(point.Count))
-						for i, bval := range point.Bounds {
-							if i < len(point.BucketCounts) {
-								bvalMs := int(bval * 1000)
-								bucket := e.localTem.reqDurBuckets[bvalMs]
-								if bucket != nil {
-									bucket.Store(safeUint64ToInt64(point.BucketCounts[i]))
-								} else {
-									telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")
-								}
+					point := data.DataPoints[len(data.DataPoints)-1]
+					e.localTem.reqDurTotalCount.Store(safeUint64ToInt64(point.Count))
+					for i, bval := range point.Bounds {
+						if i < len(point.BucketCounts) {
+							bvalMs := int(bval * 1000)
+							bucket := e.localTem.reqDurBuckets[bvalMs]
+							if bucket != nil {
+								bucket.Store(safeUint64ToInt64(point.BucketCounts[i]))
 							} else {
-								telemLogger.Warn().Msgf("invalid bucket index received from datapoint: %f", bval)
+								telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")
 							}
+						} else {
+							telemLogger.Warn().Msgf("invalid bucket index received from datapoint: %f", bval)
 						}
 					}
-					go e.localTem.UpdateServerFreqHistogram()
+					e.localTem.UpdateServerFreqHistogram()
 				}
 			}
 		}
