@@ -15,6 +15,7 @@ const (
 	INFO = iota
 	ERROR
 	FATAL
+	DEBUG
 )
 
 func initLogMSG(level int, msg string) {
@@ -32,6 +33,8 @@ func initLogMSG(level int, msg string) {
 func initZLOG(level int) {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	switch level {
+	case DEBUG:
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	default:
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}

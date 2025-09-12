@@ -29,6 +29,7 @@ type LocalTelemetryStorage struct {
 	heapAlloc             atomic.Int64
 	stackAlloc            atomic.Int64
 	spanMu                sync.RWMutex
+	freqUpdateMu          sync.Mutex
 	spanChan              chan tracetest.SpanStub
 }
 
@@ -57,11 +58,15 @@ func (lts *LocalTelemetryStorage) ValidateArticleAttr(artName string) {
 }
 
 func (lts *LocalTelemetryStorage) UpdateServerFreqHistogram() {
+	lts.freqUpdateMu.Lock()
+	defer lts.freqUpdateMu.Unlock()
+
 	p50, err := lts.calcPercentile(50)
 	if err != nil {
 		telemLogger.Warn().Msgf("unable to calculate p50 for req freq: %v", err)
 	} else {
 		lts.reqDur50.Store(p50)
+		telemLogger.Debug().Msgf("p50: %d", p50)
 	}
 
 	p90, err := lts.calcPercentile(90)
@@ -69,18 +74,24 @@ func (lts *LocalTelemetryStorage) UpdateServerFreqHistogram() {
 		telemLogger.Warn().Msgf("unable to calculate p90 for req freq: %v", err)
 	} else {
 		lts.reqDur90.Store(p90)
+		telemLogger.Debug().Msgf("p90: %d", p90)
+
 	}
 	p95, err := lts.calcPercentile(95)
 	if err != nil {
 		telemLogger.Warn().Msgf("unable to calculate p95 for req freq: %v", err)
 	} else {
 		lts.reqDur95.Store(p95)
+		telemLogger.Debug().Msgf("p95: %d", p95)
+
 	}
 	p99, err := lts.calcPercentile(99)
 	if err != nil {
 		telemLogger.Warn().Msgf("unable to calculate p99 for req freq: %v", err)
 	} else {
 		lts.reqDur99.Store(p99)
+		telemLogger.Debug().Msgf("p99: %d", p99)
+
 	}
 }
 
@@ -90,8 +101,8 @@ func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error
 		return 0, nil
 	}
 
-	targetCount := (totalCount * percentile) / 100
-	var runningCount int64 = 0
+	targetCount := float64(totalCount*percentile) / 100
+	var runningCount float64 = 0
 	previousBound := 0
 
 	for _, boundary := range lts.reqFreqBound {
@@ -100,7 +111,7 @@ func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error
 			continue
 		}
 
-		count := bucket.Load()
+		count := float64(bucket.Load())
 		runningCount += count
 
 		if runningCount >= targetCount {

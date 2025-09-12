@@ -61,6 +61,46 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 			percentile:     50,
 			expectedResult: 0,
 		},
+		{
+			name:       "P50 production data",
+			totalCount: 33,
+			bucketCounts: map[int]int64{
+				5:  32,
+				10: 1,
+			},
+			percentile:     50,
+			expectedResult: 2,
+		},
+		{
+			name:       "P90 production data",
+			totalCount: 33,
+			bucketCounts: map[int]int64{
+				5:  32,
+				10: 1,
+			},
+			percentile:     90,
+			expectedResult: 4,
+		},
+		{
+			name:       "P95 production data",
+			totalCount: 33,
+			bucketCounts: map[int]int64{
+				5:  32,
+				10: 1,
+			},
+			percentile:     95,
+			expectedResult: 4,
+		},
+		{
+			name:       "P99 production data",
+			totalCount: 33,
+			bucketCounts: map[int]int64{
+				5:  32,
+				10: 1,
+			},
+			percentile:     99,
+			expectedResult: 8,
+		},
 	}
 
 	for _, tt := range tests {
