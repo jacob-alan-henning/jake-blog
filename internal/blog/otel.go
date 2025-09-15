@@ -54,7 +54,7 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 						attr, found := point.Attributes.Value(attribute.Key("article"))
 						if found {
 							arty := attr.AsString()
-							e.localTem.ValidateArticleAttr(arty)
+							e.localTem.validateArticleAttr(arty)
 							e.localTem.servedCountPerArticle[arty].Store(point.Value)
 						} else {
 							e.localTem.articlesServed.Store(point.Value)

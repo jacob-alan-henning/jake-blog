@@ -1,3 +1,12 @@
+// Package blog
+// config.go -> configuration from env vars
+// blogserver.go -> glues everything together
+// log.go -> init loggers
+// manager.go -> actual blog implementation
+// markdown.go -> markdowm to html
+// otel.go -> otel instrumentation and exporters to telemetry struct
+// server.go -> http server
+// telemetry.go -> in memory telemetry store for blog
 package blog
 
 import (
@@ -27,14 +36,14 @@ type BlogServerOption func(*BlogServer) error
 func WithConfig(envPrefix string) BlogServerOption {
 	return func(bs *BlogServer) error {
 		cfg, err := NewConfig(
-			WithEnvironment(envPrefix),
+			withEnvironment(envPrefix),
 		)
 		if err != nil {
 			return fmt.Errorf("config creation failed: %w", err)
 		}
 		bs.cfg = *cfg
 
-		if err := bs.cfg.InitializePrivateKey(); err != nil { // side effects
+		if err := bs.cfg.initializePrivateKey(); err != nil { // side effects
 			return fmt.Errorf("private key initialization failed: %w", err)
 		}
 		return nil
@@ -82,7 +91,7 @@ func (bs *BlogServer) Start() error {
 	}
 
 	// Start blog manager updates
-	bs.bm.ListenForUpdates(bs.ctx)
+	bs.bm.listenForUpdates(bs.ctx)
 	bs.bm.TriggerUpdate()
 
 	err = bs.server.Start(bs.ctx)

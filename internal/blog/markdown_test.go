@@ -12,6 +12,6 @@ func BenchmarkMarkdowntoHtml(b *testing.B) {
 	`
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = markdownToHtml(md, true)
+		_, _ = markdownToHTML(md, true)
 	}
 }

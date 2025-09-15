@@ -106,7 +106,7 @@ func (c *Config) Validate() error {
 }
 
 // load config from env var
-func WithEnvironment(prefix string) ConfigOption {
+func withEnvironment(prefix string) ConfigOption {
 	return func(c *Config) error {
 		envVars := map[string]*string{
 			"SERVER_PORT":          &c.ServerPort,
@@ -149,21 +149,22 @@ func WithEnvironment(prefix string) ConfigOption {
 }
 
 // Write private key to disk if provided
-func (c *Config) InitializePrivateKey() error {
+func (c *Config) initializePrivateKey() error {
 	if c.RepoKeyPriv == "" {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(c.KeyPrivPath), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.KeyPrivPath), 0o700); err != nil {
 		return fmt.Errorf("failed to create private key directory: %w", err)
 	}
-	if err := os.WriteFile(c.KeyPrivPath, []byte(c.RepoKeyPriv), 0600); err != nil {
+	if err := os.WriteFile(c.KeyPrivPath, []byte(c.RepoKeyPriv), 0o600); err != nil {
 		return fmt.Errorf("failed to write private key: %w", err)
 	}
 
 	return nil
 }
 
+// CheckAnonEnvironmentalFlag ...
 // profiling configuration
 // need this because profiling configuration should be seperate from
 // the BlogServer struct configuration. Because it directly effects the runtime.

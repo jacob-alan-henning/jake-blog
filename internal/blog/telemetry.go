@@ -49,7 +49,7 @@ func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 }
 
 // have to do this because article names can change during process runtime
-func (lts *LocalTelemetryStorage) ValidateArticleAttr(artName string) {
+func (lts *LocalTelemetryStorage) validateArticleAttr(artName string) {
 	_, found := lts.servedCountPerArticle[artName]
 	if !found {
 		lts.servedCountPerArticle[artName] = &atomic.Int64{}

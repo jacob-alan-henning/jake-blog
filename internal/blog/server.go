@@ -34,7 +34,6 @@ type Server struct {
 	sigChan      chan os.Signal
 }
 
-// make this return an err properly!!!!!
 func NewServer(bm *BlogManager, ls *LocalTelemetryStorage) *Server {
 	meter := otel.GetMeterProvider().Meter("jake-blog")
 
@@ -207,7 +206,7 @@ func (s *Server) ArticleList(w http.ResponseWriter, r *http.Request) {
 	defer s.bm.articleMutex.RUnlock()
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, err := w.Write(s.bm.HtmlList)
+	_, err := w.Write(s.bm.HTMLList)
 	if err != nil {
 		span.SetAttributes(attribute.String("error", "failed to write articlelist"))
 	}

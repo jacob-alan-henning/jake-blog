@@ -20,13 +20,13 @@ type Article struct {
 	Title    string
 	FileName string
 	Content  []byte
-	Url      string
+	URL      string
 	Date     time.Time
 }
 
 type BlogManager struct {
 	Articles     map[string]Article
-	HtmlList     []byte // html snippet - list of articles
+	HTMLList     []byte // html snippet - list of articles
 	SiteMap      string
 	RSSFeed      []byte
 	Config       *Config
@@ -56,7 +56,7 @@ func (bm *BlogManager) GetRssFeed() []byte {
 }
 
 // start update handler and handle signals which force update
-func (bm *BlogManager) ListenForUpdates(ctx context.Context) {
+func (bm *BlogManager) listenForUpdates(ctx context.Context) {
 	sighup := make(chan os.Signal, 1)
 	signal.Notify(sighup, syscall.SIGHUP)
 
@@ -105,20 +105,7 @@ func (bm *BlogManager) extractTitle(filepath string) string {
 	return strings.TrimSuffix(path.Base(filepath), ".md")
 }
 
-func (bm *BlogManager) updateContent() error {
-	err := FetchMarkdownRepo(bm.Config)
-	if err != nil {
-		return fmt.Errorf("error cloning md repository: %w", err)
-	}
-
-	files, err := filepath.Glob(filepath.Join(bm.Config.ContentDir, "*.md"))
-	if err != nil {
-		return fmt.Errorf("could not find md files: %w", err)
-	}
-
-	newArticles := make(map[string]Article)
-	var links []string
-
+func (bm *BlogManager) createArticleFromFileName(file string) (*Article, error) {
 	artTmpl := `
         <!DOCTYPE html>
         <html>
@@ -134,6 +121,61 @@ func (bm *BlogManager) updateContent() error {
         </html>
     `
 
+	fileName := strings.TrimSuffix(filepath.Base(file), ".md")
+	headerTitle := bm.extractTitle(file)
+
+	lastModified, err := getFileLastModified(bm.Config, filepath.Base(file))
+	if err != nil {
+		managerLogger.Error().Str("file", fileName).Msgf("failed to process article last modified date: %v", err)
+		return nil, err
+	}
+
+	fileContent, err := markdownToHTML(file, bm.Config.IMAGECACHE)
+	if err != nil {
+		log.Printf("Error processing %s: %v", fileName, err)
+		managerLogger.Error().Msgf("failed to convert markdown to html: %v", err)
+		return nil, err
+	}
+	html := fmt.Sprintf(artTmpl, headerTitle, fileContent)
+
+	return &Article{
+		Title:    headerTitle,
+		FileName: fileName,
+		Content:  []byte(html),
+		URL:      fmt.Sprintf("/article/%s", fileName),
+		Date:     lastModified,
+	}, nil
+}
+
+func creatRSSitemFromArticle(art *Article) string {
+	return fmt.Sprintf(`
+		<item>
+		<title> %s </title>
+		<link> %s </link>
+		<pubDate> %s </pubDate>
+		<guid isPermaLink="true"> %s </guid>
+		</item>
+		`,
+		art.Title,
+		fmt.Sprintf("https://jake-henning.com%s", art.URL),
+		art.Date.Format("Mon, 15:04:05 GMT"),
+		fmt.Sprintf("https://jake-henning.com%s", art.URL),
+	)
+}
+
+func (bm *BlogManager) updateContent() error {
+	err := FetchMarkdownRepo(bm.Config)
+	if err != nil {
+		return fmt.Errorf("error cloning md repository: %w", err)
+	}
+
+	files, err := filepath.Glob(filepath.Join(bm.Config.ContentDir, "*.md"))
+	if err != nil {
+		return fmt.Errorf("could not find md files: %w", err)
+	}
+
+	newArticles := make(map[string]Article)
+	var links []string
 	var rssBuilder strings.Builder
 
 	rssBuilder.WriteString(`
@@ -146,44 +188,14 @@ func (bm *BlogManager) updateContent() error {
    `)
 
 	for _, file := range files {
-		fileName := strings.TrimSuffix(filepath.Base(file), ".md")
-		headerTitle := bm.extractTitle(file)
-
-		lastModified, err := getFileLastModified(bm.Config, filepath.Base(file))
+		fArt, err := bm.createArticleFromFileName(file)
 		if err != nil {
-			managerLogger.Error().Str("file", fileName).Msgf("failed to process article last modified date: %v", err)
+			managerLogger.Warn().Msgf("failed to load article %s: %v", file, err)
 			continue
 		}
+		newArticles[fArt.FileName] = *fArt
 
-		fileContent, err := markdownToHtml(file, bm.Config.IMAGECACHE)
-		if err != nil {
-			log.Printf("Error processing %s: %v", fileName, err)
-			managerLogger.Error().Msgf("failed to convert markdown to html: %v", err)
-			continue
-		}
-		html := fmt.Sprintf(artTmpl, headerTitle, fileContent)
-
-		newArticles[fileName] = Article{
-			Title:    headerTitle,
-			FileName: fileName,
-			Content:  []byte(html),
-			Url:      fmt.Sprintf("/article/%s", fileName),
-			Date:     lastModified,
-		}
-
-		rssBuilder.WriteString(fmt.Sprintf(`
-      <item>
-        <title> %s </title>
-        <link> %s </link>
-        <pubDate> %s </pubDate>
-        <guid isPermaLink="true"> %s </guid>
-       </item>
-      `,
-			newArticles[fileName].Title,
-			fmt.Sprintf("https://jake-henning.com%s", newArticles[fileName].Url),
-			newArticles[fileName].Date.Format("Mon, 15:04:05 GMT"),
-			fmt.Sprintf("https://jake-henning.com%s", newArticles[fileName].Url),
-		))
+		rssBuilder.WriteString(creatRSSitemFromArticle(fArt))
 	}
 
 	keys := make([]string, 0, len(newArticles))
@@ -211,7 +223,7 @@ func (bm *BlogManager) updateContent() error {
 
 	bm.articleMutex.Lock()
 	bm.Articles = newArticles
-	bm.HtmlList = []byte(strings.Join(links, "<br/>"))
+	bm.HTMLList = []byte(strings.Join(links, "<br/>"))
 	bm.RSSFeed = []byte(rssBuilder.String())
 	bm.articleMutex.Unlock()
 
