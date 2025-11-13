@@ -138,12 +138,28 @@ jobs:
           BLOG_ENVMNT: staging
           ANSIBLE_LIGHTSAIL_PREFIX: staging-jake
         run: ansible-playbook site.yml --tags common
-
+      
       - name: Test staging deployment
         id: staging-test
         continue-on-error: true  
         run: |
-          curl -f https://staging.jake-henning.com/content/
+          echo "Testing staging deployment..."
+          max_attempts=30
+          attempt=0
+          
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -f -s https://staging.jake-henning.com/content/ > /dev/null 2>&1; then
+              echo "✓ Staging is responding!"
+              exit 0
+            fi
+            
+            echo "Attempt $((attempt+1))/$max_attempts failed, retrying in 2s..."
+            sleep 2
+            attempt=$((attempt+1))
+          done
+          
+          echo "✗ Staging failed to respond after $max_attempts attempts"
+          exit 1
 
       - name: Cleanup staging
         working-directory: deployments/terraform
