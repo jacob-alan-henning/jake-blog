@@ -150,12 +150,12 @@ jobs:
       - name: Test staging deployment
         id: staging-test
         run: |
-          echo "Testing staging deployment..."
+          STAGING_DOMAIN="${{ steps.staging-domain.outputs.domain }}"
           max_attempts=30
           attempt=0
           
           while [ $attempt -lt $max_attempts ]; do
-            if curl -f -s https://staging.jake-henning.com/content/ > /dev/null 2>&1; then
+            if curl -f -s https://${STAGING_DOMAIN}/content/ > /dev/null 2>&1; then
               exit 0
             fi
             
