@@ -158,7 +158,7 @@ func creatRSSitemFromArticle(art *Article) string {
 		`,
 		art.Title,
 		fmt.Sprintf("https://jake-henning.com%s", art.URL),
-		art.Date.Format("Mon, 15:04:05 GMT"),
+		art.Date.Format("Mon, 02 Jan 2006 15:04:05 GMT"),
 		fmt.Sprintf("https://jake-henning.com%s", art.URL),
 	)
 }
@@ -184,7 +184,7 @@ func (bm *BlogManager) updateContent() error {
         <title> Jacob Henning's Blog </title>
         <link> https://jake-henning.com </link>
         <description> The personal blog of Jacob Henning </description>
-        <atom:link href="https://jake-henning/feed" rel="self" type="application/rss+xml" />
+        <atom:link href="https://jake-henning.com/feed" rel="self" type="application/rss+xml" />
    `)
 
 	for _, file := range files {

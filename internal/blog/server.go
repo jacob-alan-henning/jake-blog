@@ -30,6 +30,7 @@ type Server struct {
 	lts          *LocalTelemetryStorage
 	startTime    time.Time
 	articleViews metric.Int64Counter
+	badReq       metric.Int64Counter
 	errChan      chan error
 	sigChan      chan os.Signal
 }
@@ -45,11 +46,19 @@ func NewServer(bm *BlogManager, ls *LocalTelemetryStorage) *Server {
 		return nil
 	}
 
+	badRequest, err := meter.Int64Counter(
+		"request.blocked", metric.WithDescription("number of requests blocked by middleware"),
+	)
+	if err != nil {
+		return nil
+	}
+
 	return &Server{
 		bm:           bm,
 		tracer:       otel.Tracer("jake-blog"),
 		startTime:    time.Now(),
 		articleViews: articleViews,
+		badReq:       badRequest,
 		errChan:      make(chan error, 1),
 		sigChan:      make(chan os.Signal, 1),
 		lts:          ls,
@@ -115,7 +124,7 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) shutdown() error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	// Attempt graceful shutdown
@@ -162,24 +171,40 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	return mux
 }
 
+func (s *Server) reqBlockedInstrument(reason string, ctx context.Context) {
+	s.badReq.Add(
+		ctx,
+		1,
+		metric.WithAttributes(attribute.String("blocked", reason)),
+	)
+	s.badReq.Add(
+		ctx,
+		1,
+	)
+}
+
 func (s *Server) wrapHandler(h http.Handler, name string) http.Handler {
 	validateHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(r.URL.Path) > 1024 {
+			s.reqBlockedInstrument("URI_LENGTH", r.Context())
 			http.Error(w, "URI too long", http.StatusBadRequest)
 			return
 		}
 
 		if r.Method != http.MethodGet {
+			s.reqBlockedInstrument("BAD_METHOD", r.Context())
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
 		if strings.ContainsRune(r.URL.Path, 0xfffd) { // inavlid utf-8 characters
+			s.reqBlockedInstrument("INVALID_CHAR_URL", r.Context())
 			http.Error(w, "Invalid URL characters", http.StatusBadRequest)
 			return
 		}
 
 		if strings.Contains(r.URL.Path, "%00") || strings.Contains(r.URL.Path, "\x00") { // null termination
+			s.reqBlockedInstrument("INVALID_CHAR_URL", r.Context())
 			http.Error(w, "Invalid URL characters", http.StatusBadRequest)
 			return
 		}
@@ -295,7 +320,6 @@ func (s *Server) makeMetricSnippet() *string {
 	metricBuilder.WriteString("<p>blog.articles.served: ") //%d</p>", s.lts.articlesServed.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.articlesServed.Load())))
 	metricBuilder.WriteString("</p>")
-
 	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
 	for art := range s.lts.servedCountPerArticle {
 		orderedKeys = append(orderedKeys, art)
@@ -314,18 +338,34 @@ func (s *Server) makeMetricSnippet() *string {
 		}
 	}
 
+	metricBuilder.WriteString("<p>blog.requests.blocked: ")
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqBlocked.Load())))
+	metricBuilder.WriteString("</p>")
+	orderedReasons := make([]string, 0, len(s.lts.reqBlockedByReason))
+	for reason := range s.lts.reqBlockedByReason {
+		orderedReasons = append(orderedReasons, reason)
+	}
+	sort.Strings(orderedReasons)
+	for _, res := range orderedReasons {
+		counter, exists := s.lts.reqBlockedByReason[res]
+		if exists {
+			metricBuilder.WriteString("<p>blog.requests.blocked.")
+			metricBuilder.WriteString(res)
+			metricBuilder.WriteString(": ")
+			metricBuilder.WriteString(strconv.Itoa(int(counter.Load())))
+			metricBuilder.WriteString("</p>")
+		}
+	}
+
 	metricBuilder.WriteString("<p>blog.server.request.ms.p50: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur50.Load())))
 	metricBuilder.WriteString("</p>")
-
 	metricBuilder.WriteString("<p>blog.server.request.ms.p90: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur90.Load())))
 	metricBuilder.WriteString("</p>")
-
 	metricBuilder.WriteString("<p>blog.server.request.ms.p95: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur95.Load())))
 	metricBuilder.WriteString("</p>")
-
 	metricBuilder.WriteString("<p>blog.server.request.ms.p99: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur99.Load())))
 	metricBuilder.WriteString("</p>")

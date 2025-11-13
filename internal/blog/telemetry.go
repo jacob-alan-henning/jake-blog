@@ -25,6 +25,8 @@ type LocalTelemetryStorage struct {
 	reqFreqBound          []int
 	articlesServed        atomic.Int64
 	servedCountPerArticle map[string]*atomic.Int64 // ["articlename"].Load()
+	reqBlocked            atomic.Int64
+	reqBlockedByReason    map[string]*atomic.Int64 // ["reason"].Load()
 	numGoRo               atomic.Int64
 	heapAlloc             atomic.Int64
 	stackAlloc            atomic.Int64
@@ -42,6 +44,7 @@ func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 	}
 	return &LocalTelemetryStorage{
 		servedCountPerArticle: make(map[string]*atomic.Int64, 0),
+		reqBlockedByReason:    make(map[string]*atomic.Int64, 0),
 		spanChan:              make(chan tracetest.SpanStub, 10),
 		reqDurBuckets:         bcounts,
 		reqFreqBound:          boundaries,
@@ -54,6 +57,15 @@ func (lts *LocalTelemetryStorage) validateArticleAttr(artName string) {
 	if !found {
 		lts.servedCountPerArticle[artName] = &atomic.Int64{}
 		lts.servedCountPerArticle[artName].Store(0)
+	}
+}
+
+// will want to make this more generic at some point
+func (lts *LocalTelemetryStorage) validateReqBlockedReason(reason string) {
+	_, found := lts.reqBlockedByReason[reason]
+	if !found {
+		lts.reqBlockedByReason[reason] = &atomic.Int64{}
+		lts.reqBlockedByReason[reason].Store(0)
 	}
 }
 

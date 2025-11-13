@@ -59,6 +59,15 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 						} else {
 							e.localTem.articlesServed.Store(point.Value)
 						}
+					case "request.blocked":
+						attr, found := point.Attributes.Value(attribute.Key("blocked"))
+						if found {
+							reason := attr.AsString()
+							e.localTem.validateReqBlockedReason(reason)
+							e.localTem.reqBlockedByReason[reason].Store(point.Value)
+						} else {
+							e.localTem.reqBlocked.Store(point.Value)
+						}
 					}
 				}
 			case metricdata.Histogram[float64]:
