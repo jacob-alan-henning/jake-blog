@@ -11,13 +11,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -mod=readonly -ldflags="-w -s" -
 RUN ssh-keyscan -H github.com >> /etc/known_hosts
 
 FROM alpine:latest
-ARG INTERNAL_PORT
-ENV INTERNAL_PORT=${INTERNAL_PORT:-8080}
 
 COPY --from=builder /app/jake-blog /jake-blog
 COPY --from=builder /app/web /web
 
 COPY --from=builder /etc/known_hosts /etc/known_hosts
 
-EXPOSE ${INTERNAL_PORT}
+EXPOSE 443
 ENTRYPOINT ["/jake-blog"]

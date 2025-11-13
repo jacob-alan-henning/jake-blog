@@ -6,7 +6,7 @@ services:
       vector:
         condition: service_started
     ports:
-      - "0.0.0.0:443:8080"
+      - "0.0.0.0:443:443"
       - "0.0.0.0:80:80"
     networks:
       - monitoring-network
@@ -14,7 +14,7 @@ services:
       - locals.env
     volumes:
       - /Users/jake/jake-blog/deployments/local/profile:/tmp/profile
-      - /Users/jake/local-certs:/etc/letsencrypt
+      - /Users/jake/local-certs:/etc/letsencrypt:ro
       - /Users/jake/blogs:/tmp/content
       - /Users/jake/jake-blog/deployments/local/logs:/tmp/logs
   vector:
