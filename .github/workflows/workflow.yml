@@ -82,12 +82,22 @@ jobs:
           role-to-assume: ${{ secrets.AWS_IDP_ARN }}
           aws-region: us-east-1
 
+      - name: Generate unique staging domain
+        id: staging-domain
+        run: |
+          RANDOM_ID=$(head -c 32 /dev/urandom | tr -dc 'a-z0-9' | head -c 8)
+          STAGING_DOMAIN="staging-${RANDOM_ID}.jake-henning.com"
+          echo "domain=$STAGING_DOMAIN" >> $GITHUB_OUTPUT
+
+
       - name: deploy-staging 
         continue-on-error: true  
         working-directory: deployments/terraform
         run: | 
+          STAGING_DOMAIN="${{ steps.staging-domain.outputs.domain }}"
           terraform init -backend-config="key=staging.tfstate"
-          terraform plan -var-file=env/staging/staging.tfvars -out=staging.tfplan
+          terraform plan -var-file=env/staging/staging.tfvars \
+            -var "domain_name=${STAGING_DOMAIN}" -out=staging.tfplan
           terraform apply staging.tfplan
 
       - name: Setup Ansible
@@ -123,14 +133,6 @@ jobs:
             UserKnownHostsFile /dev/null
             IdentityFile ~/.ssh/lightsail.pem
             User ubuntu" > ~/.ssh/config
-
-      - name: Generate unique staging domain
-        id: staging-domain
-        run: |
-          RANDOM_ID=$(head -c 32 /dev/urandom | tr -dc 'a-z0-9' | head -c 8)
-          STAGING_DOMAIN="staging-${RANDOM_ID}.jake-henning.com"
-          echo "domain=$STAGING_DOMAIN" >> $GITHUB_OUTPUT
-          echo "Generated staging domain: $STAGING_DOMAIN"
 
       - name: "Run Ansible playbook"
         continue-on-error: true  
@@ -169,8 +171,10 @@ jobs:
       - name: Cleanup staging
         working-directory: deployments/terraform
         run: |
+          STAGING_DOMAIN="${{ steps.staging-domain.outputs.domain }}"
           terraform init -backend-config="key=staging.tfstate"
-          terraform destroy -var-file=env/staging/staging.tfvars -auto-approve
+          terraform destroy -var-file=env/staging/staging.tfvars \
+            -var "domain_name=${STAGING_DOMAIN}" -auto-approve
 
 
   provision:
