@@ -127,7 +127,7 @@ jobs:
       - name: Generate unique staging domain
         id: staging-domain
         run: |
-          RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 8 | head -n 1)
+          RANDOM_ID=$(head -c 32 /dev/urandom | tr -dc 'a-z0-9' | head -c 8)
           STAGING_DOMAIN="staging-${RANDOM_ID}.jake-henning.com"
           echo "domain=$STAGING_DOMAIN" >> $GITHUB_OUTPUT
           echo "Generated staging domain: $STAGING_DOMAIN"
