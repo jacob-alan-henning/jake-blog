@@ -140,7 +140,7 @@ jobs:
         run: ansible-playbook site.yml --tags common
 
       - name: Test staging deployment
-        id: test
+        id: staging-test
         continue-on-error: true  
         run: |
           curl -f https://staging.jake-henning.com/content/

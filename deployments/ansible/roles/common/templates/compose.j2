@@ -1,5 +1,6 @@
 services:
   jake-blog:
+    restart: unless-stopped
     image: {{ registry | trim }}/{{ repository | trim }}:{{ image_tag | trim }}
     network_mode: host
     cap_add:
