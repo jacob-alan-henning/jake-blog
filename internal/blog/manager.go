@@ -184,7 +184,7 @@ func (bm *BlogManager) updateContent() error {
         <title> Jacob Henning's Blog </title>
         <link> https://jake-henning.com </link>
         <description> The personal blog of Jacob Henning </description>
-        <atom:link href="https://jake-henning.com/feed" rel="self" type="application/rss+xml" />
+        <atom:link href="https://jake-henning.com/feed/" rel="self" type="application/rss+xml" />
    `)
 
 	for _, file := range files {
