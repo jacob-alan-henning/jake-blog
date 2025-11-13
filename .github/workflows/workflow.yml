@@ -141,7 +141,6 @@ jobs:
       
       - name: Test staging deployment
         id: staging-test
-        continue-on-error: true  
         run: |
           echo "Testing staging deployment..."
           max_attempts=30
@@ -149,33 +148,22 @@ jobs:
           
           while [ $attempt -lt $max_attempts ]; do
             if curl -f -s https://staging.jake-henning.com/content/ > /dev/null 2>&1; then
-              echo "✓ Staging is responding!"
               exit 0
             fi
             
             echo "Attempt $((attempt+1))/$max_attempts failed, retrying in 2s..."
-            sleep 2
+            sleep 4
             attempt=$((attempt+1))
           done
           
-          echo "✗ Staging failed to respond after $max_attempts attempts"
           exit 1
 
       - name: Cleanup staging
         working-directory: deployments/terraform
-        if: always()
         run: |
           terraform init -backend-config="key=staging.tfstate"
           terraform destroy -var-file=env/staging/staging.tfvars -auto-approve
 
-      - name: Fail job if staging test failed
-        if: always()
-        run: |
-          if [ "${{ steps.staging-test.outcome }}" = "failure" ]; then
-            echo "::error::Staging tests failed!"
-            exit 1
-          fi
-          echo "::notice::Staging tests passed!"
 
   provision:
     needs: [staging-test]
