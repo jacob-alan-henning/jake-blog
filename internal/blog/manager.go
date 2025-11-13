@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"path"
@@ -27,7 +26,7 @@ type Article struct {
 type BlogManager struct {
 	Articles     map[string]Article
 	HTMLList     []byte // html snippet - list of articles
-	SiteMap      string
+	SiteMap      []byte
 	RSSFeed      []byte
 	Config       *Config
 	articleMutex sync.RWMutex
@@ -54,6 +53,9 @@ func (bm *BlogManager) GetRssFeed() []byte {
 	defer bm.articleMutex.RUnlock()
 	return bm.RSSFeed
 }
+
+//func (bm *BlogManager) GetSiteMap() []byte {
+//}
 
 // start update handler and handle signals which force update
 func (bm *BlogManager) listenForUpdates(ctx context.Context) {
@@ -132,7 +134,6 @@ func (bm *BlogManager) createArticleFromFileName(file string) (*Article, error) 
 
 	fileContent, err := markdownToHTML(file, bm.Config.IMAGECACHE)
 	if err != nil {
-		log.Printf("Error processing %s: %v", fileName, err)
 		managerLogger.Error().Msgf("failed to convert markdown to html: %v", err)
 		return nil, err
 	}
@@ -177,6 +178,7 @@ func (bm *BlogManager) updateContent() error {
 	newArticles := make(map[string]Article)
 	var links []string
 	var rssBuilder strings.Builder
+	// var mapBuilder strings.Builder
 
 	rssBuilder.WriteString(`
      <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
@@ -225,6 +227,7 @@ func (bm *BlogManager) updateContent() error {
 	bm.Articles = newArticles
 	bm.HTMLList = []byte(strings.Join(links, "<br/>"))
 	bm.RSSFeed = []byte(rssBuilder.String())
+	//	bm.SiteMap = []byte
 	bm.articleMutex.Unlock()
 
 	managerLogger.Info().Msgf("content update succedeed: loaded %d articles", len(newArticles))
