@@ -295,7 +295,7 @@
         path: /opt/jakeblog
         state: directory
         owner: jakeblog
-        group: jakeblog
+        group: certreaders
         mode: '0750'
       become: true
 
