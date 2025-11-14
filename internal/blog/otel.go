@@ -68,6 +68,8 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 						} else {
 							e.localTem.reqBlocked.Store(point.Value)
 						}
+					case "robotic.visitors":
+						e.localTem.roboticVisitors.Store(point.Value)
 					}
 				}
 			case metricdata.Histogram[float64]:

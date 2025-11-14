@@ -208,47 +208,44 @@
         mode: "2750"
       become: true
 
-    - name: Ensure certreaders can read existing LIVE cert files
+
+    - name: Allow certreaders to traverse top-level letsencrypt dirs
       ansible.posix.acl:
-        path: "/etc/letsencrypt/live/{{ dns_domain }}"
+        path: "/etc/letsencrypt/{{ item }}"
+        entity: certreaders
+        etype: group
+        permissions: rX
+        state: present
+      loop:
+        - live
+        - archive
+      become: true
+
+    - name: Ensure certreaders can read existing cert files
+      ansible.posix.acl:
+        path: "/etc/letsencrypt/{{ item }}/{{ dns_domain }}"
         entity: certreaders
         etype: group
         permissions: rX
         state: present
         recursive: yes
+      loop:
+        - live
+        - archive
       become: true
 
-    - name: Ensure future LIVE cert files inherit ACLs for certreaders
+    - name: Ensure future cert files inherit ACLs for certreaders
       ansible.posix.acl:
-        path: "/etc/letsencrypt/live/{{ dns_domain }}"
+        path: "/etc/letsencrypt/{{ item }}/{{ dns_domain }}"
         entity: certreaders
         etype: group
         permissions: rX
         state: present
         recursive: yes
         default: yes
-      become: true
-
-
-    - name: Ensure certreaders can read existing ARCHIVE cert files
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/archive/{{ dns_domain }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-        recursive: yes
-      become: true
-
-    - name: Ensure future ARCHIVE cert files inherit ACLs for certreaders
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/archive/{{ dns_domain }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-        recursive: yes
-        default: yes
+      loop:
+        - live
+        - archive
       become: true
 
     - name: Ensure keyring directory exists

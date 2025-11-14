@@ -31,6 +31,7 @@ type Server struct {
 	startTime    time.Time
 	articleViews metric.Int64Counter
 	badReq       metric.Int64Counter
+	roboVisit    metric.Int64Counter
 	errChan      chan error
 	sigChan      chan os.Signal
 }
@@ -53,12 +54,20 @@ func NewServer(bm *BlogManager, ls *LocalTelemetryStorage) *Server {
 		return nil
 	}
 
+	robo, err := meter.Int64Counter(
+		"robotic.visitors", metric.WithDescription("number of times someone has requested robots.txt"),
+	)
+	if err != nil {
+		return nil
+	}
+
 	return &Server{
 		bm:           bm,
 		tracer:       otel.Tracer("jake-blog"),
 		startTime:    time.Now(),
 		articleViews: articleViews,
 		badReq:       badRequest,
+		roboVisit:    robo,
 		errChan:      make(chan error, 1),
 		sigChan:      make(chan os.Signal, 1),
 		lts:          ls,
@@ -163,6 +172,11 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 	mux.Handle("/feed/", s.wrapHandler(
 		http.HandlerFunc(s.RssFeedHandler),
 		"RSS Feed Handler",
+	))
+
+	mux.Handle("/robots.txt", s.wrapHandler(
+		http.HandlerFunc(s.RobotsHandler),
+		"robots.txt handler",
 	))
 
 	mux.HandleFunc("/telemetry/trace", s.LastTrace)
@@ -404,5 +418,21 @@ func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write(feedContent)
 	if err != nil {
 		serverLogger.Error().Msgf("failed tp send rss feed to client: %v", err)
+	}
+}
+
+func (s *Server) SiteMapHandler(w http.ResponseWriter, r *http.Request) {
+	smap := s.bm.GetSiteMap()
+	_, err := w.Write(smap)
+	if err != nil {
+		serverLogger.Error().Msgf("failed to send sitemap to client: %v", err)
+	}
+}
+
+func (s *Server) RobotsHandler(w http.ResponseWriter, r *http.Request) {
+	smap := "User-agent: *\nDisallow:\n\nSitemap: https://jake-henning.com/sitemap.xml"
+	_, err := w.Write([]byte(smap))
+	if err != nil {
+		serverLogger.Error().Msgf("failed to write robots.txt: %v", err)
 	}
 }

@@ -27,6 +27,7 @@ type LocalTelemetryStorage struct {
 	servedCountPerArticle map[string]*atomic.Int64 // ["articlename"].Load()
 	reqBlocked            atomic.Int64
 	reqBlockedByReason    map[string]*atomic.Int64 // ["reason"].Load()
+	roboticVisitors       atomic.Int64
 	numGoRo               atomic.Int64
 	heapAlloc             atomic.Int64
 	stackAlloc            atomic.Int64

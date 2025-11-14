@@ -54,8 +54,11 @@ func (bm *BlogManager) GetRssFeed() []byte {
 	return bm.RSSFeed
 }
 
-//func (bm *BlogManager) GetSiteMap() []byte {
-//}
+func (bm *BlogManager) GetSiteMap() []byte {
+	bm.articleMutex.RLock()
+	defer bm.articleMutex.RUnlock()
+	return bm.SiteMap
+}
 
 // start update handler and handle signals which force update
 func (bm *BlogManager) listenForUpdates(ctx context.Context) {
@@ -178,7 +181,7 @@ func (bm *BlogManager) updateContent() error {
 	newArticles := make(map[string]Article)
 	var links []string
 	var rssBuilder strings.Builder
-	// var mapBuilder strings.Builder
+	//	var mapBuilder strings.Builder
 
 	rssBuilder.WriteString(`
      <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
