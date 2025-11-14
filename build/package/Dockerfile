@@ -12,10 +12,19 @@ RUN ssh-keyscan -H github.com >> /etc/known_hosts
 
 FROM alpine:latest
 
+RUN apk add --no-cache libcap
+
+RUN addgroup -g 2200 jakeblog \
+ && adduser -D -u 2100 -G jakeblog jakeblog
+
 COPY --from=builder /app/jake-blog /jake-blog
 COPY --from=builder /app/web /web
 
 COPY --from=builder /etc/known_hosts /etc/known_hosts
+
+RUN setcap 'cap_net_bind_service=+ep' /jake-blog
+
+USER jakeblog
 
 EXPOSE 443
 ENTRYPOINT ["/jake-blog"]

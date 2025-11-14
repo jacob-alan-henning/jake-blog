@@ -31,9 +31,18 @@
         state: latest
       become: true
 
+    - name: Create certreaders group with fixed GID
+      ansible.builtin.group:
+        name: certreaders
+        gid: 2200
+        system: yes
+      become: true
+
     - name: Create the jakeblog user
       ansible.builtin.user:
         name: jakeblog
+        uid: 2100
+        group: certreaders
         system: yes
         shell: /usr/sbin/nologin
         home: /opt/jakeblog
@@ -62,6 +71,7 @@
           - gnupg
           - busybox # need httpd for cerbot http challenge
           - snapd # needed to install certbot
+          - acl
         state: present
       become: true
 
@@ -138,8 +148,8 @@
       ansible.builtin.file:
         path: /etc/letsencrypt
         state: directory
-        owner: jakeblog
-        group: jakeblog
+        owner: root
+        group: root
         mode: '0755'
       become: true
 
@@ -190,7 +200,35 @@
         path: /tmp/certbot-webroot
         state: absent 
       become: true 
- 
+
+    - name: Ensure domain dir has certreaders group and setgid
+      ansible.builtin.file:
+        path: "/etc/letsencrypt/live/{{ dns_domain }}"
+        group: certreaders
+        mode: "2750"
+      become: true
+
+    - name: Allow certreaders to read existing cert files
+      ansible.posix.acl:
+        path: "/etc/letsencrypt/live/{{ dns_domain }}"
+        entity: certreaders
+        etype: group
+        permissions: rX
+        state: present
+        recursive: yes
+      become: true
+
+    - name: Set default ACLs so future cert files are readable by certreaders
+      ansible.posix.acl:
+        path: "/etc/letsencrypt/live/{{ dns_domain }}"
+        entity: certreaders
+        etype: group
+        permissions: rX
+        state: present
+        recursive: yes
+        default: yes
+      become: true
+        
     - name: Ensure keyring directory exists
       ansible.builtin.file:
         path: /etc/apt/keyrings
