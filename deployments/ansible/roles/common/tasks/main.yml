@@ -208,17 +208,7 @@
         mode: "2750"
       become: true
 
-    - name: Allow certreaders to read existing cert files
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/live/{{ dns_domain }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-        recursive: yes
-      become: true
-
-    - name: Set default ACLs so future cert files are readable by certreaders
+    - name: Set certreaders to present and future certs
       ansible.posix.acl:
         path: "/etc/letsencrypt/live/{{ dns_domain }}"
         entity: certreaders
@@ -311,7 +301,7 @@
         src: templates/compose.j2
         dest: /opt/jakeblog/compose.yml
         owner: jakeblog
-        group: jakeblog
+        group: certreaders
         mode: '0644'
       become: true
 
@@ -320,7 +310,7 @@
         src: templates/env.j2
         dest: /opt/jakeblog/.env
         owner: jakeblog
-        group: jakeblog
+        group: certreaders
         mode: '0600'
       become: true
 
@@ -380,7 +370,7 @@
         src: templates/update.j2
         dest: /opt/jakeblog/update.sh
         owner: jakeblog
-        group: jakeblog
+        group: certreaders
         mode: '0755'
       become: true
 
