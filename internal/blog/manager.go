@@ -181,7 +181,18 @@ func (bm *BlogManager) updateContent() error {
 	newArticles := make(map[string]Article)
 	var links []string
 	var rssBuilder strings.Builder
-	//	var mapBuilder strings.Builder
+	var mapBuilder strings.Builder
+
+	mapBuilder.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+	mapBuilder.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+
+	mapBuilder.WriteString(` <url>`)
+	mapBuilder.WriteString(`<loc>https://jake-henning.com/</loc>`)
+	mapBuilder.WriteString(`</url>`)
+
+	mapBuilder.WriteString(` <url>`)
+	mapBuilder.WriteString(`<loc>https://jake-henning.com/feed/</loc>`)
+	mapBuilder.WriteString(`</url>`)
 
 	rssBuilder.WriteString(`
      <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
@@ -201,6 +212,13 @@ func (bm *BlogManager) updateContent() error {
 		newArticles[fArt.FileName] = *fArt
 
 		rssBuilder.WriteString(creatRSSitemFromArticle(fArt))
+
+		mapBuilder.WriteString(` <url>`)
+		mapBuilder.WriteString(`<loc>https://jake-henning.com/article/`)
+		mapBuilder.WriteString(fArt.FileName)
+		mapBuilder.WriteString(`</loc>`)
+		mapBuilder.WriteString(`</url>`)
+
 	}
 
 	keys := make([]string, 0, len(newArticles))
@@ -226,11 +244,13 @@ func (bm *BlogManager) updateContent() error {
     </rss>
     `)
 
+	mapBuilder.WriteString(`</urlset>`)
+
 	bm.articleMutex.Lock()
 	bm.Articles = newArticles
 	bm.HTMLList = []byte(strings.Join(links, "<br/>"))
 	bm.RSSFeed = []byte(rssBuilder.String())
-	//	bm.SiteMap = []byte
+	bm.SiteMap = []byte(mapBuilder.String())
 	bm.articleMutex.Unlock()
 
 	managerLogger.Info().Msgf("content update succedeed: loaded %d articles", len(newArticles))

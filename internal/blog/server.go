@@ -179,6 +179,11 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 		"robots.txt handler",
 	))
 
+	mux.Handle("/sitemap.xml", s.wrapHandler(
+		http.HandlerFunc(s.SiteMapHandler),
+		"sitemap handler",
+	))
+
 	mux.HandleFunc("/telemetry/trace", s.LastTrace)
 	mux.HandleFunc("/telemetry/metric", s.MetricSnippet)
 
@@ -430,7 +435,10 @@ func (s *Server) SiteMapHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) RobotsHandler(w http.ResponseWriter, r *http.Request) {
-	smap := "User-agent: *\nDisallow:\n\nSitemap: https://jake-henning.com/sitemap.xml"
+	smap := "User-agent: *\n" +
+		"Disallow: /content\n" +
+		"Disallow: /telemetry/\n\n" +
+		"Sitemap: https://jake-henning.com/sitemap.xml"
 	_, err := w.Write([]byte(smap))
 	if err != nil {
 		serverLogger.Error().Msgf("failed to write robots.txt: %v", err)
