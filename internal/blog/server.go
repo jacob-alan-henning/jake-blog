@@ -376,6 +376,10 @@ func (s *Server) makeMetricSnippet() *string {
 		}
 	}
 
+	metricBuilder.WriteString("<p>blog.requests.robots: ")
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.roboticVisitors.Load())))
+	metricBuilder.WriteString("</p>")
+
 	metricBuilder.WriteString("<p>blog.server.request.ms.p50: ") //%d</p>", s.lts.reqDur50.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur50.Load())))
 	metricBuilder.WriteString("</p>")
@@ -443,4 +447,8 @@ func (s *Server) RobotsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		serverLogger.Error().Msgf("failed to write robots.txt: %v", err)
 	}
+	s.roboVisit.Add(
+		r.Context(),
+		1,
+	)
 }
