@@ -76,8 +76,10 @@
         <div class="tab-panel" data-tab="cost">
           <h2>Cost</h2>
             <h3>display: {7d,30d,90d}</h3>
+            <div class="cost-table-container">
               <table id="cost-table" hx-get="/telemetry/cost" hx-trigger="load, every 30s" hx-swap="innerHTML">
-              </table>  
+              </table>
+            </div>
         </div>
 
       </div>
