@@ -3,37 +3,49 @@ package blog
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 type LocalTelemetryStorage struct {
-	latestSpan            tracetest.SpanStub
-	reqDurTotalCount      atomic.Int64
-	reqDurBuckets         map[int]*atomic.Int64
-	reqDur99              atomic.Int64
-	reqDur95              atomic.Int64
-	reqDur90              atomic.Int64
-	reqDur50              atomic.Int64
-	reqFreqBound          []int
-	articlesServed        atomic.Int64
-	servedCountPerArticle map[string]*atomic.Int64 // ["articlename"].Load()
-	reqBlocked            atomic.Int64
-	reqBlockedByReason    map[string]*atomic.Int64 // ["reason"].Load()
-	roboticVisitors       atomic.Int64
-	numGoRo               atomic.Int64
-	heapAlloc             atomic.Int64
-	stackAlloc            atomic.Int64
-	spanMu                sync.RWMutex
-	freqUpdateMu          sync.Mutex
+	latestSpan tracetest.SpanStub
+
+	reqDurTotalCount atomic.Int64
+	reqDur99         atomic.Int64
+	reqDur95         atomic.Int64
+	reqDur90         atomic.Int64
+	reqDur50         atomic.Int64
+	articlesServed   atomic.Int64
+	reqBlocked       atomic.Int64
+	roboticVisitors  atomic.Int64
+	numGoRo          atomic.Int64
+	heapAlloc        atomic.Int64
+	stackAlloc       atomic.Int64
+
+	spanMu       sync.RWMutex
+	costMu       sync.RWMutex
+	freqUpdateMu sync.Mutex
+
 	spanChan              chan tracetest.SpanStub
+	reqFreqBound          []int
+	reqDurBuckets         map[int]*atomic.Int64
+	servedCountPerArticle map[string]*atomic.Int64
+	reqBlockedByReason    map[string]*atomic.Int64
+	costHTML              []byte
+	cfg                   *Config
 }
 
 func NewLocalTelemetryStorage() *LocalTelemetryStorage {
@@ -49,6 +61,7 @@ func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 		spanChan:              make(chan tracetest.SpanStub, 10),
 		reqDurBuckets:         bcounts,
 		reqFreqBound:          boundaries,
+		costHTML:              []byte{},
 	}
 }
 
@@ -144,9 +157,12 @@ func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error
 	return int64(lts.reqFreqBound[len(lts.reqFreqBound)-1]), nil
 }
 
-func (lts *LocalTelemetryStorage) Start(ctx context.Context) error {
+func (lts *LocalTelemetryStorage) Start(ctx context.Context, cfg *Config) error {
+	lts.cfg = cfg
+
 	go func() {
 		go runtimeMetricLoop(ctx)
+		go lts.costUpdateLoop(ctx)
 		for {
 			select {
 			case span := <-lts.spanChan:
@@ -159,6 +175,214 @@ func (lts *LocalTelemetryStorage) Start(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+func generateDisabledCostHTML() []byte {
+	var costBuilder strings.Builder
+	costBuilder.Grow(256)
+
+	costBuilder.WriteString("<thead>")
+	costBuilder.WriteString("<tr>")
+	costBuilder.WriteString("<th>Service</th>")
+	costBuilder.WriteString("<th>7d</th>")
+	costBuilder.WriteString("<th>30d</th>")
+	costBuilder.WriteString("<th>90d</th>")
+	costBuilder.WriteString("</tr>")
+	costBuilder.WriteString("</thead>")
+
+	costBuilder.WriteString("<tbody>")
+	costBuilder.WriteString("<tr>")
+	costBuilder.WriteString("<td colspan=\"4\" style=\"text-align: center; padding: 20px; color: #76ff03;\">")
+	costBuilder.WriteString("Cost tracking disabled")
+	costBuilder.WriteString("</td>")
+	costBuilder.WriteString("</tr>")
+	costBuilder.WriteString("</tbody>")
+
+	return []byte(costBuilder.String())
+}
+
+func (lts *LocalTelemetryStorage) fetchAWSCosts(ctx context.Context) (map[string]map[string]string, error) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client := costexplorer.NewFromConfig(cfg)
+	now := time.Now()
+
+	// Filter to only track specific services
+	allowedServices := []string{
+		"Amazon Lightsail",
+		"AmazonCloudWatch",
+		"Amazon EC2 Container Registry (ECR)",
+		"Amazon Simple Storage Service",
+	}
+	allowedServicesMap := make(map[string]bool)
+	for _, service := range allowedServices {
+		allowedServicesMap[service] = true
+	}
+
+	// Periods: 7d, 30d, 90d
+	periods := map[string]int{
+		"7d":  7,
+		"30d": 30,
+		"90d": 90,
+	}
+
+	serviceCosts := make(map[string]map[string]string)
+
+	for period, days := range periods {
+		start := now.AddDate(0, 0, -days).Format("2006-01-02")
+		end := now.Format("2006-01-02")
+
+		input := &costexplorer.GetCostAndUsageInput{
+			TimePeriod: &types.DateInterval{
+				Start: aws.String(start),
+				End:   aws.String(end),
+			},
+			Granularity: types.GranularityMonthly,
+			Metrics:     []string{"UnblendedCost"},
+			GroupBy: []types.GroupDefinition{
+				{
+					Type: types.GroupDefinitionTypeDimension,
+					Key:  aws.String("SERVICE"),
+				},
+			},
+		}
+
+		result, err := client.GetCostAndUsage(ctx, input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get cost data for %s: %w", period, err)
+		}
+
+		// Aggregate costs across all time buckets for this period
+		periodCosts := make(map[string]float64)
+
+		for _, resultByTime := range result.ResultsByTime {
+			for _, group := range resultByTime.Groups {
+				if len(group.Keys) > 0 {
+					serviceName := group.Keys[0]
+					// Only track allowed services
+					if !allowedServicesMap[serviceName] {
+						continue
+					}
+					if group.Metrics != nil {
+						if metric, ok := group.Metrics["UnblendedCost"]; ok && metric.Amount != nil {
+							amount := parseFloat(*metric.Amount)
+							periodCosts[serviceName] += amount
+						}
+					}
+				}
+			}
+		}
+
+		// Store aggregated costs for this period
+		for serviceName, totalCost := range periodCosts {
+			if serviceCosts[serviceName] == nil {
+				serviceCosts[serviceName] = make(map[string]string)
+			}
+			serviceCosts[serviceName][period] = fmt.Sprintf("$%.2f", totalCost)
+		}
+	}
+
+	return serviceCosts, nil
+}
+
+func parseFloat(s string) float64 {
+	var f float64
+	_, err := fmt.Sscanf(s, "%f", &f)
+	if err != nil {
+		telemLogger.Warn().Msgf("failed to parse float from string '%s': %v", s, err)
+		return 0.0
+	}
+	return f
+}
+
+func generateCostHTML(serviceCosts map[string]map[string]string) []byte {
+	var costBuilder strings.Builder
+	costBuilder.Grow(1024)
+
+	costBuilder.WriteString("<thead>")
+	costBuilder.WriteString("<tr>")
+	costBuilder.WriteString("<th>Service</th>")
+	costBuilder.WriteString("<th>7d</th>")
+	costBuilder.WriteString("<th>30d</th>")
+	costBuilder.WriteString("<th>90d</th>")
+	costBuilder.WriteString("</tr>")
+	costBuilder.WriteString("</thead>")
+
+	costBuilder.WriteString("<tbody>")
+	if len(serviceCosts) == 0 {
+		costBuilder.WriteString("<tr>")
+		costBuilder.WriteString("<td colspan=\"4\" style=\"text-align: center; padding: 20px;\">")
+		costBuilder.WriteString("No cost data available")
+		costBuilder.WriteString("</td>")
+		costBuilder.WriteString("</tr>")
+	} else {
+		for service, costs := range serviceCosts {
+			costBuilder.WriteString("<tr>")
+			costBuilder.WriteString("<td>")
+			costBuilder.WriteString(service)
+			costBuilder.WriteString("</td>")
+			costBuilder.WriteString("<td>")
+			costBuilder.WriteString(costs["7d"])
+			costBuilder.WriteString("</td>")
+			costBuilder.WriteString("<td>")
+			costBuilder.WriteString(costs["30d"])
+			costBuilder.WriteString("</td>")
+			costBuilder.WriteString("<td>")
+			costBuilder.WriteString(costs["90d"])
+			costBuilder.WriteString("</td>")
+			costBuilder.WriteString("</tr>")
+		}
+	}
+	costBuilder.WriteString("</tbody>")
+
+	return []byte(costBuilder.String())
+}
+
+func (lts *LocalTelemetryStorage) costUpdateLoop(ctx context.Context) {
+	if lts.cfg == nil || !lts.cfg.CostTrackingEnabled {
+		lts.costMu.Lock()
+		lts.costHTML = generateDisabledCostHTML()
+		lts.costMu.Unlock()
+		telemLogger.Info().Msg("cost tracking is disabled")
+		return
+	}
+
+	serviceCosts, err := lts.fetchAWSCosts(ctx)
+	lts.costMu.Lock()
+	if err != nil {
+		telemLogger.Error().Msgf("failed to fetch initial AWS costs: %v", err)
+		lts.costHTML = []byte(`<thead><tr><th>Service</th><th>7d</th><th>30d</th><th>90d</th></tr></thead><tbody><tr><td colspan="4" style="text-align: center; padding: 20px; color: #ff0000;">Failed to fetch cost data. Check logs for details.</td></tr></tbody>`)
+	} else {
+		lts.costHTML = generateCostHTML(serviceCosts)
+		telemLogger.Debug().Msg("cost data updated successfully")
+	}
+	lts.costMu.Unlock()
+
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			serviceCosts, err := lts.fetchAWSCosts(ctx)
+			if err != nil {
+				telemLogger.Error().Msgf("failed to fetch AWS costs: %v", err)
+				// Keep old data - don't overwrite costHTML on failure
+				continue
+			}
+
+			lts.costMu.Lock()
+			lts.costHTML = generateCostHTML(serviceCosts)
+			lts.costMu.Unlock()
+
+			telemLogger.Debug().Msg("cost data updated successfully")
+		}
+	}
 }
 
 func runtimeMetricLoop(ctx context.Context) {

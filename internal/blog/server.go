@@ -186,6 +186,7 @@ func (s *Server) SetupRoutes() *http.ServeMux {
 
 	mux.HandleFunc("/telemetry/trace", s.LastTrace)
 	mux.HandleFunc("/telemetry/metric", s.MetricSnippet)
+	mux.HandleFunc("/telemetry/cost", s.CostSnippet)
 
 	return mux
 }
@@ -419,6 +420,18 @@ func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
 	fmt.Fprint(w, *s.makeMetricSnippet())
+}
+
+func (s *Server) CostSnippet(w http.ResponseWriter, r *http.Request) {
+	s.lts.costMu.RLock()
+	costHTML := s.lts.costHTML
+	s.lts.costMu.RUnlock()
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, err := w.Write(costHTML)
+	if err != nil {
+		serverLogger.Error().Msgf("failed to send cost data: %v", err)
+	}
 }
 
 func (s *Server) RssFeedHandler(w http.ResponseWriter, r *http.Request) {

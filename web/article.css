@@ -112,6 +112,34 @@ pre, code {
     overflow-x: auto;
 }
 
+code {
+    background-color: #1e1e1e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+pre {
+    background-color: #1e1e1e;
+    padding: 16px;
+    padding-bottom: 32px;
+    border-radius: 8px;
+    line-height: 1.5;
+    border-top: 3px solid #76ff03;
+    box-shadow: 0 0 15px rgba(118, 255, 3, 0.1);
+}
+
+pre code {
+    background-color: transparent;
+    padding: 0;
+    font-family: 'Fira Mono', 'Courier New', monospace;
+}
+
+pre code::selection {
+    background-color: #76ff03;
+    color: #1e1e1e;
+}
+
 .json-display {
     background: #1e1e1e;
     color: #d4d4d4;

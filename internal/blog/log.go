@@ -29,6 +29,7 @@ var (
 	blogLogger    zerolog.Logger
 	telemLogger   zerolog.Logger
 	mdLogger      zerolog.Logger
+	configLogger  zerolog.Logger
 )
 
 func InitLoggers() error {
@@ -37,5 +38,6 @@ func InitLoggers() error {
 	blogLogger = log.Logger.With().Str("subsystem", "blog").Logger()
 	telemLogger = log.Logger.With().Str("subsystem", "telemetry").Logger()
 	mdLogger = log.Logger.With().Str("subsystem", "md").Logger()
+	configLogger = log.Logger.With().Str("subsystem", "config").Logger()
 	return nil
 }

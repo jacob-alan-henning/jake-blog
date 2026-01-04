@@ -81,7 +81,7 @@ func NewBlogServer(opts ...BlogServerOption) (*BlogServer, error) {
 func (bs *BlogServer) Start() error {
 	signal.Notify(bs.sigChan, syscall.SIGINT, syscall.SIGTERM)
 	// start localtemetrystorage
-	err := bs.telem.Start(bs.ctx)
+	err := bs.telem.Start(bs.ctx, &bs.cfg)
 	if err != nil {
 		return fmt.Errorf("failed to start telemetry: %w", err)
 	}

@@ -8,76 +8,92 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
 </head>
 <body>
-
 <header>
     <div class="container">
         <h1>Welcome to the Personal Blog of Jacob Henning</h1>
         <p>I work with computers.</p>
     </div>
 </header>
-
 <div class="container">
-
-    <nav class="tabs">
-        <a href="#blog" class="tab-button active" data-tab="tab1">Blog</a>
-        <a href="#telemetry" class="tab-button" data-tab="tab2">Telemetry</a>
-        <a href="#about" class="tab-button" data-tab="tab3">About</a>
+  <div class="tab-group" data-tab-group="main">
+    <nav class="tab-buttons">
+        <a href="#blog" class="tab-button" data-tab="blog">Blog</a>
+        <a href="#telemetry" class="tab-button" data-tab="telemetry">Telemetry</a>
+        <a href="#about" class="tab-button" data-tab="about">About</a>
     </nav>
 
-    <div id="tab1" class="tab-content active">
+    <div class="tab-panel" data-tab="blog">
         <h2>Posts</h2>
         <ul hx-get="/content" hx-trigger="load" hx-swap="innerHTML">
             <li>Loading...</li>
         </ul>
         <a href="https://jake-henning.com/feed">
-          <img src="/rss.png" alt="RSS Feed" width="24" height="24" style="border: none;">
+          <img src="/rss.png" alt="RSS Feed" width="24" height="24" class="rss-icon">
         </a>
-          <a href="http://www.rssboard.org/rss-validator/check.cgi?url=https%3A//jake-henning.com/feed/"><img src="valid-rss-rogers.png" alt="[Valid RSS]" title="Validate my RSS feed" />
+        <a href="https://www.rssboard.org/rss-validator/check.cgi?url=https%3A//jake-henning.com/feed/">
+          <img src="valid-rss-rogers.png" alt="[Valid RSS]" title="Validate my RSS feed" />
         </a>
     </div>
 
-    <div id="tab2" class="tab-content">
-        <h2>Metrics</h2>
-        <h3>filter: {this.process}</h3>
-        <h3>since:{this.process.start}</h3>
+    <div class="tab-panel" data-tab="telemetry">
+      <div class="tab-group" data-tab-group="telemetry">
+        <nav class="tab-buttons">
+          <a href="#telemetry/metrics" class="tab-button" data-tab="metrics">Metrics</a>
+          <a href="#telemetry/traces" class="tab-button" data-tab="traces">Traces</a>
+          <a href="#telemetry/cost" class="tab-button" data-tab="cost">Cost</a>
+        </nav>
 
-        <ul id="metrics-list" hx-get="/telemetry/metric" hx-trigger="load, every 10s" hx-swap="innerHTML">
-            <li>Loading...</li>
-        </ul>  
+        <div class="tab-panel" data-tab="metrics">
+          <h2>Metrics</h2>
+          <h3>filter: {this.process}</h3>
+          <h3>since:{this.process.start}</h3>
+          <ul id="metrics-list" hx-get="/telemetry/metric" hx-trigger="load, every 10s" hx-swap="innerHTML">
+              <li>Loading...</li>
+          </ul>
+        </div>
 
-  <h2>Tracing</h2>      
-        <h3>filter: {tail.n.1}</h3>
-<p>
-  <a href="#"
-     class="refresh-link"
-     hx-get="/telemetry/trace"
-     hx-target="#trace-block"
-     hx-swap="innerHTML">
-     refresh
-  </a>
-</p>
+        <div class="tab-panel" data-tab="traces">
+          <h2>Tracing</h2>
+          <h3>filter: {tail.n.1}</h3>
+          <p>
+            <a href="#"
+              class="refresh-link"
+              hx-get="/telemetry/trace"
+              hx-target="#trace-block"
+              hx-swap="innerHTML">
+              refresh
+            </a>
+          </p>
+          <div class="json-display">
+            <pre id="trace-block"
+                hx-get="/telemetry/trace"
+                hx-swap="innerHTML"
+                hx-trigger="load"
+                class="json-viewer">Waiting for traces...</pre>
+          </div>
+        </div>
 
-<div class="json-display">
-  <pre id="trace-block"
-       hx-get="/telemetry/trace"
-       hx-swap="innerHTML"
-       hx-trigger="load"
-       class="json-viewer">Waiting for traces...</pre>
-</div>
+        <div class="tab-panel" data-tab="cost">
+          <h2>Cost</h2>
+            <h3>display: {7d,30d,90d}</h3>
+              <table id="cost-table" hx-get="/telemetry/cost" hx-trigger="load, every 30s" hx-swap="innerHTML">
+              </table>  
+        </div>
+
+      </div>
     </div>
 
-    <div id="tab3" class="tab-content">
+    <div class="tab-panel" data-tab="about">
         <h2>About Me</h2>
         <p>Interested in all things SRE/Infra/Cloud</p>
         <p>Fishing on the weekends</p>
         <p>Slightly north of greater Boston</p>
     </div>
-
+  </div>
 </div>
-
 <footer>
     <div class="container">
-        Contact: jacobalanhenning@gmail.com 
+        Contact: jacobalanhenning@gmail.com
     </div>
 </footer>
 <script src="/htmx.min.js"></script>

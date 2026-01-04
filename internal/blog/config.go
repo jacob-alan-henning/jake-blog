@@ -1,43 +1,52 @@
 package blog
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
+	"github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
 )
 
 type ConfigOption func(*Config) error
 
 type Config struct {
-	ServerPort    string // ServerPort is the port number the HTTP server will listen on (e.g. "8080")
-	RepoURL       string // RepoURL is the Git repository URL containing blog content
-	ContentDir    string // ContentDir is the local directory where blog content will be stored
-	RepoKeyPriv   string // RepoKeyPriv is the private key content for Git repository access
-	KeyPrivPath   string // KeyPrivPath is the file path where the private key will be stored
-	RepoPass      string // RepoPass is the optional password for the private key
-	LocalOnly     bool   // LocalyOnly = true specifies that the server won't clone a git repo but rely on md files in ContentDir
-	HTTPSOn       bool   // HTTPSON = true specifies that https is enabled for the web server. http will be redirected
-	HTTPSCRT      string // HTTPSCRT is the location of the https certificate
-	HTTPSKey      string // HTTPSKEY is the location of the key associated with your certifacte
-	IMAGECACHE    bool   // IMAGECACHE is whether or not to apply custom renderer to markdown images pointing local images to s3 bucket
-	ExportMetrics bool   // ExportMetrics is whether or not to export metrics to a remote otlp reciever
-	MetricOTLP    string // MetricOTLP is the uri of the grpc otlp reciever
-	Env           string // environment used to tag observability events
-	ProfileFlag   bool   // indicates if profiling is enabled
-	ProfilePath   string // where to write profiling report
+	ServerPort          string // ServerPort is the port number the HTTP server will listen on (e.g. "8080")
+	RepoURL             string // RepoURL is the Git repository URL containing blog content
+	ContentDir          string // ContentDir is the local directory where blog content will be stored
+	RepoKeyPriv         string // RepoKeyPriv is the private key content for Git repository access
+	KeyPrivPath         string // KeyPrivPath is the file path where the private key will be stored
+	RepoPass            string // RepoPass is the optional password for the private key
+	LocalOnly           bool   // LocalyOnly = true specifies that the server won't clone a git repo but rely on md files in ContentDir
+	HTTPSOn             bool   // HTTPSON = true specifies that https is enabled for the web server. http will be redirected
+	HTTPSCRT            string // HTTPSCRT is the location of the https certificate
+	HTTPSKey            string // HTTPSKEY is the location of the key associated with your certifacte
+	IMAGECACHE          bool   // IMAGECACHE is whether or not to apply custom renderer to markdown images pointing local images to s3 bucket
+	ExportMetrics       bool   // ExportMetrics is whether or not to export metrics to a remote otlp reciever
+	MetricOTLP          string // MetricOTLP is the uri of the grpc otlp reciever
+	Env                 string // environment used to tag observability events
+	ProfileFlag         bool   // indicates if profiling is enabled
+	ProfilePath         string // where to write profiling report
+	CostTrackingEnabled bool   // CostTrackingEnabled enables AWS cost tracking via Cost Explorer API
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		ServerPort:    "8080",
-		ContentDir:    "content",
-		KeyPrivPath:   filepath.Join(os.TempDir(), "blog-repo-key"),
-		LocalOnly:     false,
-		HTTPSOn:       false,
-		IMAGECACHE:    false,
-		ExportMetrics: false,
-		ProfileFlag:   false,
+		ServerPort:          "8080",
+		ContentDir:          "content",
+		KeyPrivPath:         filepath.Join(os.TempDir(), "blog-repo-key"),
+		LocalOnly:           false,
+		HTTPSOn:             false,
+		IMAGECACHE:          false,
+		ExportMetrics:       false,
+		ProfileFlag:         false,
+		CostTrackingEnabled: false,
 	}
 }
 
@@ -102,6 +111,15 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if c.CostTrackingEnabled {
+		// Validate AWS credentials can access Cost Explorer
+		// AWS SDK will automatically load credentials from environment variables
+		if err := c.validateAWSCostAccess(); err != nil {
+			configLogger.Warn().Msgf("AWS Cost Explorer validation failed: disabling cost tracking: %v", err)
+			c.CostTrackingEnabled = false
+		}
+	}
+
 	return nil
 }
 
@@ -122,11 +140,12 @@ func withEnvironment(prefix string) ConfigOption {
 			"PROFILING_REPORT":     &c.ProfilePath,
 		}
 		envFlags := map[string]*bool{
-			"LOCAL_ONLY":        &c.LocalOnly,
-			"HTTPS_ON":          &c.HTTPSOn,
-			"IMAGECACHE":        &c.IMAGECACHE,
-			"EXPORT_METRICS":    &c.ExportMetrics,
-			"PROFILING_ENABLED": &c.ProfileFlag,
+			"LOCAL_ONLY":            &c.LocalOnly,
+			"HTTPS_ON":              &c.HTTPSOn,
+			"IMAGECACHE":            &c.IMAGECACHE,
+			"EXPORT_METRICS":        &c.ExportMetrics,
+			"PROFILING_ENABLED":     &c.ProfileFlag,
+			"COST_TRACKING_ENABLED": &c.CostTrackingEnabled,
 		}
 		for env, ptr := range envVars {
 			if value := os.Getenv(prefix + env); value != "" {
@@ -186,4 +205,38 @@ func CheckAnonEnvironmentalFlag(flag string) bool {
 func CheckAnonEnvironmental(flag string) string {
 	value := os.Getenv(flag)
 	return value
+}
+
+// validateAWSCostAccess attempts to call AWS Cost Explorer to verify credentials
+// AWS SDK automatically loads credentials from environment variables or AWS config files
+func (c *Config) validateAWSCostAccess() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	client := costexplorer.NewFromConfig(cfg)
+
+	// Try a minimal Cost Explorer API call to validate credentials
+	now := time.Now()
+	start := now.AddDate(0, 0, -7).Format("2006-01-02")
+	end := now.Format("2006-01-02")
+
+	_, err = client.GetCostAndUsage(ctx, &costexplorer.GetCostAndUsageInput{
+		TimePeriod: &types.DateInterval{
+			Start: aws.String(start),
+			End:   aws.String(end),
+		},
+		Granularity: types.GranularityDaily,
+		Metrics:     []string{"UnblendedCost"},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to validate AWS Cost Explorer access: %w", err)
+	}
+
+	configLogger.Info().Msg("AWS Cost Explorer credentials validated successfully")
+	return nil
 }
