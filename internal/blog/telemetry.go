@@ -28,12 +28,14 @@ type LocalTelemetryStorage struct {
 	reqDur95         atomic.Int64
 	reqDur90         atomic.Int64
 	reqDur50         atomic.Int64
-	articlesServed   atomic.Int64
-	reqBlocked       atomic.Int64
-	roboticVisitors  atomic.Int64
-	numGoRo          atomic.Int64
-	heapAlloc        atomic.Int64
-	stackAlloc       atomic.Int64
+	articlesServed      atomic.Int64
+	reqBlocked          atomic.Int64
+	roboticVisitors     atomic.Int64
+	numGoRo             atomic.Int64
+	heapAlloc           atomic.Int64
+	stackAlloc          atomic.Int64
+	costUpdateSuccess   atomic.Int64
+	costUpdateFailure   atomic.Int64
 
 	spanMu       sync.RWMutex
 	costMu       sync.RWMutex
@@ -177,30 +179,6 @@ func (lts *LocalTelemetryStorage) Start(ctx context.Context, cfg *Config) error 
 	return nil
 }
 
-func generateDisabledCostHTML() []byte {
-	var costBuilder strings.Builder
-	costBuilder.Grow(256)
-
-	costBuilder.WriteString("<thead>")
-	costBuilder.WriteString("<tr>")
-	costBuilder.WriteString("<th>Service</th>")
-	costBuilder.WriteString("<th>7d</th>")
-	costBuilder.WriteString("<th>30d</th>")
-	costBuilder.WriteString("<th>90d</th>")
-	costBuilder.WriteString("</tr>")
-	costBuilder.WriteString("</thead>")
-
-	costBuilder.WriteString("<tbody>")
-	costBuilder.WriteString("<tr>")
-	costBuilder.WriteString("<td colspan=\"4\" style=\"text-align: center; padding: 20px; color: #76ff03;\">")
-	costBuilder.WriteString("Cost tracking disabled")
-	costBuilder.WriteString("</td>")
-	costBuilder.WriteString("</tr>")
-	costBuilder.WriteString("</tbody>")
-
-	return []byte(costBuilder.String())
-}
-
 func (lts *LocalTelemetryStorage) fetchAWSCosts(ctx context.Context) (map[string]map[string]string, error) {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
@@ -298,9 +276,9 @@ func parseFloat(s string) float64 {
 	return f
 }
 
-func generateCostHTML(serviceCosts map[string]map[string]string) []byte {
+func generateCostHTML(serviceCosts map[string]map[string]string, lastUpdate string) []byte {
 	var costBuilder strings.Builder
-	costBuilder.Grow(1024)
+	costBuilder.Grow(1536)
 
 	costBuilder.WriteString("<thead>")
 	costBuilder.WriteString("<tr>")
@@ -338,13 +316,39 @@ func generateCostHTML(serviceCosts map[string]map[string]string) []byte {
 	}
 	costBuilder.WriteString("</tbody>")
 
+	costBuilder.WriteString("<tfoot>")
+	costBuilder.WriteString("<tr>")
+	costBuilder.WriteString("<td colspan=\"4\" class=\"cost-updated\">Last updated: ")
+	costBuilder.WriteString(lastUpdate)
+	costBuilder.WriteString("</td>")
+	costBuilder.WriteString("</tr>")
+	costBuilder.WriteString("</tfoot>")
+
 	return []byte(costBuilder.String())
 }
 
 func (lts *LocalTelemetryStorage) costUpdateLoop(ctx context.Context) {
+	meter := otel.GetMeterProvider().Meter("jake-blog")
+
+	costSuccess, err := meter.Int64Counter("blog.cost.update.success",
+		metric.WithDescription("number of successful cost updates"),
+		metric.WithUnit("updates"))
+	if err != nil {
+		telemLogger.Error().Msgf("failed to init cost update metrics: %v", err)
+		return
+	}
+
+	costFailure, err := meter.Int64Counter("blog.cost.update.failure",
+		metric.WithDescription("number of failed cost updates"),
+		metric.WithUnit("updates"))
+	if err != nil {
+		telemLogger.Error().Msgf("failed to init cost update metrics: %v", err)
+		return
+	}
+
 	if lts.cfg == nil || !lts.cfg.CostTrackingEnabled {
 		lts.costMu.Lock()
-		lts.costHTML = generateDisabledCostHTML()
+		lts.costHTML = []byte(`<thead><tr><th>Service</th><th>7d</th><th>30d</th><th>90d</th></tr></thead><tbody><tr><td colspan="4" style="text-align: center; padding: 20px; color: #76ff03;">Cost tracking disabled</td></tr></tbody><tfoot><tr><td colspan="4" class="cost-updated">Last updated: N/A</td></tr></tfoot>`)
 		lts.costMu.Unlock()
 		telemLogger.Info().Msg("cost tracking is disabled")
 		return
@@ -354,9 +358,13 @@ func (lts *LocalTelemetryStorage) costUpdateLoop(ctx context.Context) {
 	lts.costMu.Lock()
 	if err != nil {
 		telemLogger.Error().Msgf("failed to fetch initial AWS costs: %v", err)
-		lts.costHTML = []byte(`<thead><tr><th>Service</th><th>7d</th><th>30d</th><th>90d</th></tr></thead><tbody><tr><td colspan="4" style="text-align: center; padding: 20px; color: #ff0000;">Failed to fetch cost data. Check logs for details.</td></tr></tbody>`)
+		timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
+		lts.costHTML = []byte(`<thead><tr><th>Service</th><th>7d</th><th>30d</th><th>90d</th></tr></thead><tbody><tr><td colspan="4" style="text-align: center; padding: 20px; color: #ff0000;">Failed to fetch cost data. Check logs for details.</td></tr></tbody><tfoot><tr><td colspan="4" class="cost-updated">Last updated: ` + timestamp + `</td></tr></tfoot>`)
+		costFailure.Add(ctx, 1)
 	} else {
-		lts.costHTML = generateCostHTML(serviceCosts)
+		timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
+		lts.costHTML = generateCostHTML(serviceCosts, timestamp)
+		costSuccess.Add(ctx, 1)
 		telemLogger.Debug().Msg("cost data updated successfully")
 	}
 	lts.costMu.Unlock()
@@ -372,14 +380,17 @@ func (lts *LocalTelemetryStorage) costUpdateLoop(ctx context.Context) {
 			serviceCosts, err := lts.fetchAWSCosts(ctx)
 			if err != nil {
 				telemLogger.Error().Msgf("failed to fetch AWS costs: %v", err)
+				costFailure.Add(ctx, 1)
 				// Keep old data - don't overwrite costHTML on failure
 				continue
 			}
 
+			timestamp := time.Now().UTC().Format("2006-01-02 15:04:05 UTC")
 			lts.costMu.Lock()
-			lts.costHTML = generateCostHTML(serviceCosts)
+			lts.costHTML = generateCostHTML(serviceCosts, timestamp)
 			lts.costMu.Unlock()
 
+			costSuccess.Add(ctx, 1)
 			telemLogger.Debug().Msg("cost data updated successfully")
 		}
 	}

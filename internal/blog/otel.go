@@ -70,6 +70,10 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 						}
 					case "robotic.visitors":
 						e.localTem.roboticVisitors.Store(point.Value)
+					case "blog.cost.update.success":
+						e.localTem.costUpdateSuccess.Store(point.Value)
+					case "blog.cost.update.failure":
+						e.localTem.costUpdateFailure.Store(point.Value)
 					}
 				}
 			case metricdata.Histogram[float64]:

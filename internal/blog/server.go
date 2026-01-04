@@ -330,7 +330,7 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
  */
 func (s *Server) makeMetricSnippet() *string {
 	var metricBuilder strings.Builder
-	metricBuilder.Grow(800)
+	metricBuilder.Grow(900)
 
 	uptime := time.Since(s.startTime)
 	metricBuilder.WriteString("<p>blog.uptime: ")
@@ -404,6 +404,14 @@ func (s *Server) makeMetricSnippet() *string {
 
 	metricBuilder.WriteString("<p>blog.stack.alloc.bytes: ") //%d</p>", s.lts.numGoRo.Load()))
 	metricBuilder.WriteString(strconv.Itoa(int(s.lts.stackAlloc.Load())))
+	metricBuilder.WriteString("</p>")
+
+	metricBuilder.WriteString("<p>blog.cost.update.success: ")
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.costUpdateSuccess.Load())))
+	metricBuilder.WriteString("</p>")
+
+	metricBuilder.WriteString("<p>blog.cost.update.failure: ")
+	metricBuilder.WriteString(strconv.Itoa(int(s.lts.costUpdateFailure.Load())))
 	metricBuilder.WriteString("</p>")
 
 	buf := make([]byte, 0, 19)
