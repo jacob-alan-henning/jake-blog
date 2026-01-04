@@ -178,10 +178,29 @@ ul li a {
   border-collapse: collapse;
   font-family: "Courier New", Courier, monospace;
   margin-top: 10px;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  display: block;
+  overflow-x: auto;
+}
+
+#cost-table thead,
+#cost-table tbody {
+  display: table;
+  width: 100%;
 }
 
 #cost-table thead {
   background: #2a2a2a;
+}
+
+#cost-table tr {
+  display: table-row;
+}
+
+#cost-table th,
+#cost-table td {
+  display: table-cell;
 }
 
 #cost-table th {
