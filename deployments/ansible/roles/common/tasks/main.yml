@@ -209,44 +209,16 @@
       become: true
 
 
-    - name: Allow certreaders to traverse top-level letsencrypt dirs
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/{{ item }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-      loop:
-        - live
-        - archive
+    - name: Set ACLs for certreaders on letsencrypt directories
+      ansible.builtin.shell: |
+        setfacl -m g:certreaders:rX /etc/letsencrypt/live
+        setfacl -m g:certreaders:rX /etc/letsencrypt/archive
+        setfacl -R -m g:certreaders:rX /etc/letsencrypt/live/{{ dns_domain }}
+        setfacl -R -m g:certreaders:rX /etc/letsencrypt/archive/{{ dns_domain }}
+        setfacl -d -m g:certreaders:rX /etc/letsencrypt/live/{{ dns_domain }}
+        setfacl -d -m g:certreaders:rX /etc/letsencrypt/archive/{{ dns_domain }}
       become: true
-
-    - name: Ensure certreaders can read existing cert files
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/{{ item }}/{{ dns_domain }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-        recursive: yes
-      loop:
-        - live
-        - archive
-      become: true
-
-    - name: Ensure future cert files inherit ACLs for certreaders
-      ansible.posix.acl:
-        path: "/etc/letsencrypt/{{ item }}/{{ dns_domain }}"
-        entity: certreaders
-        etype: group
-        permissions: rX
-        state: present
-        recursive: yes
-        default: yes
-      loop:
-        - live
-        - archive
-      become: true
+      changed_when: true
 
     - name: Ensure keyring directory exists
       ansible.builtin.file:
@@ -387,11 +359,13 @@
       ansible.builtin.systemd:
         name: "{{ item }}"
         state: stopped
-        enabled: false 
+        enabled: false
       loop:
         - ModemManager
         - udisks2
         - snap.certbot.renew
+        - snap.certbot.renew.timer
+        - snap.certbot.renew.service
       become: true
 
     - name: Install maintenance script 
