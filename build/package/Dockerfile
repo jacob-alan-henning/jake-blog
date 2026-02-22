@@ -1,4 +1,5 @@
-FROM golang:1.25.6 AS builder
+ARG GO_VERSION=1.26.0
+FROM golang:${GO_VERSION} AS builder
 WORKDIR /app
 
 COPY go.mod go.sum .
@@ -10,7 +11,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -mod=readonly -ldflags="-w -s" -
 
 RUN ssh-keyscan -H github.com >> /etc/known_hosts
 
-FROM alpine:latest
+FROM alpine:3.23.3
 
 RUN apk add --no-cache libcap
 

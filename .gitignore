@@ -9,3 +9,7 @@ summary.json
 summary.txt
 *.prof 
 *.log
+
+# Claude Code
+.claude/
+CLAUDE.md

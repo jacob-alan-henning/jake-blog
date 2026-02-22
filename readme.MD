@@ -26,6 +26,16 @@ export BLOG_CONTENT_DIR=./content     # Folder with markdown files i.e posts
 go run cmd/jakeserver.go
 ```
 
+## Building
+
+```bash
+# Binary
+go build -o jake-blog ./cmd
+
+# Docker image
+docker build --build-arg GO_VERSION=$(cat .go-version) -f build/package/Dockerfile .
+```
+
 ## Project Structure
 
 ```
@@ -51,6 +61,17 @@ k6 run -e TEST_PROFILE=gentle scripts/k6/load.js
 govulncheck ./internal/blog
 gosec ./internal/blog
 ```
+
+## Bumping the Go Version
+
+Update `.go-version` at the repo root, then run:
+
+```bash
+go mod edit -go=$(cat .go-version)
+go mod tidy
+```
+
+The Dockerfile and CI workflow read `.go-version` automatically.
 
 ## Deployment
 

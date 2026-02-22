@@ -31,7 +31,11 @@ footer {
 
 footer {
   font-size: 0.8em;
-  margin-top: auto; 
+  margin-top: auto;
+}
+
+footer a {
+  color: #ff0000;
 }
 
 .about,
