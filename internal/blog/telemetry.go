@@ -92,40 +92,69 @@ func (lts *LocalTelemetryStorage) UpdateServerFreqHistogram() {
 	lts.freqUpdateMu.Lock()
 	defer lts.freqUpdateMu.Unlock()
 
-	p50, err := lts.calcPercentile(50)
-	if err != nil {
-		telemLogger.Warn().Msgf("unable to calculate p50 for req freq: %v", err)
-	} else {
-		lts.reqDur50.Store(p50)
-		telemLogger.Debug().Msgf("p50: %d", p50)
-	}
-
-	p90, err := lts.calcPercentile(90)
-	if err != nil {
-		telemLogger.Warn().Msgf("unable to calculate p90 for req freq: %v", err)
-	} else {
-		lts.reqDur90.Store(p90)
-		telemLogger.Debug().Msgf("p90: %d", p90)
-
-	}
-	p95, err := lts.calcPercentile(95)
-	if err != nil {
-		telemLogger.Warn().Msgf("unable to calculate p95 for req freq: %v", err)
-	} else {
-		lts.reqDur95.Store(p95)
-		telemLogger.Debug().Msgf("p95: %d", p95)
-
-	}
-	p99, err := lts.calcPercentile(99)
-	if err != nil {
-		telemLogger.Warn().Msgf("unable to calculate p99 for req freq: %v", err)
-	} else {
-		lts.reqDur99.Store(p99)
-		telemLogger.Debug().Msgf("p99: %d", p99)
-
-	}
+	p50, p90, p95, p99 := lts.calcPercentiles()
+	lts.reqDur50.Store(p50)
+	lts.reqDur90.Store(p90)
+	lts.reqDur95.Store(p95)
+	lts.reqDur99.Store(p99)
+	telemLogger.Debug().
+		Int64("p50", p50).
+		Int64("p90", p90).
+		Int64("p95", p95).
+		Int64("p99", p99).
+		Msg("percentiles updated")
 }
 
+func (lts *LocalTelemetryStorage) calcPercentiles() (int64, int64, int64, int64) {
+	totalCount := lts.reqDurTotalCount.Load()
+	if totalCount == 0 {
+		return 0, 0, 0, 0
+	}
+
+	targets := [4]float64{
+		float64(totalCount*50) / 100,
+		float64(totalCount*90) / 100,
+		float64(totalCount*95) / 100,
+		float64(totalCount*99) / 100,
+	}
+	var results [4]int64
+	found := 0
+
+	var runningCount float64 = 0
+	previousBound := 0
+	lastBound := int64(lts.reqFreqBound[len(lts.reqFreqBound)-1])
+
+	for i, boundary := range lts.reqFreqBound {
+		count := float64(lts.reqDurBucketValues[i].Load())
+		runningCount += count
+
+		for found < 4 && runningCount >= targets[found] {
+			if count > 0 {
+				positionInBucket := targets[found] - (runningCount - count)
+				fraction := positionInBucket / count
+				lowerBound := float64(previousBound)
+				upperBound := float64(boundary)
+				results[found] = int64(math.Round(lowerBound + fraction*(upperBound-lowerBound)))
+			} else {
+				results[found] = int64(boundary)
+			}
+			found++
+		}
+		if found == 4 {
+			break
+		}
+		previousBound = boundary
+	}
+
+	for found < 4 {
+		results[found] = lastBound
+		found++
+	}
+
+	return results[0], results[1], results[2], results[3]
+}
+
+// calcPercentile computes a single percentile (used by tests)
 func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error) {
 	totalCount := lts.reqDurTotalCount.Load()
 	if totalCount == 0 {
