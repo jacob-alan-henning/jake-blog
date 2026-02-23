@@ -353,7 +353,13 @@ func (s *Server) writeMetricSnippet(w io.Writer) error {
 	ew := errWriter{w: w}
 
 	ew.str("<p>blog.uptime: ")
-	ew.str(time.Since(s.startTime).String())
+	uptimeDur := time.Since(s.startTime)
+	ew.int64(int64(uptimeDur.Hours()))
+	ew.str("h")
+	ew.int64(int64(uptimeDur.Minutes()) % 60)
+	ew.str("m")
+	ew.int64(int64(uptimeDur.Seconds()) % 60)
+	ew.str("s")
 	ew.str("</p>")
 
 	ew.str("<p>blog.articles.served: ")
