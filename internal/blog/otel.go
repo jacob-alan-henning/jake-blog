@@ -84,9 +84,9 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 					for i, bval := range point.Bounds {
 						if i < len(point.BucketCounts) {
 							bvalMs := int(bval * 1000)
-							bucket := e.localTem.reqDurBuckets[bvalMs]
-							if bucket != nil {
-								bucket.Store(safeUint64ToInt64(point.BucketCounts[i]))
+							idx, ok := e.localTem.boundaryToIndex[bvalMs]
+							if ok {
+								e.localTem.reqDurBucketValues[idx].Store(safeUint64ToInt64(point.BucketCounts[i]))
 								telemLogger.Debug().Msgf("bucket: %d count: %d", bvalMs, point.BucketCounts[i])
 							} else {
 								telemLogger.Warn().Msg("received point in req freq histogram with invalid bucket")

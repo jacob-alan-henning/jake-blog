@@ -46,8 +46,8 @@ func TestPercentileMonotonicity(t *testing.T) {
 			storage.reqDurTotalCount.Store(dataset.totalCount)
 
 			for bucketMs, count := range dataset.bucketCounts {
-				if bucket := storage.reqDurBuckets[bucketMs]; bucket != nil {
-					bucket.Store(count)
+				if idx, ok := storage.boundaryToIndex[bucketMs]; ok {
+					storage.reqDurBucketValues[idx].Store(count)
 				}
 			}
 
@@ -168,8 +168,8 @@ func TestPercentileCalcCorrectness(t *testing.T) {
 
 			storage.reqDurTotalCount.Store(tt.totalCount)
 			for bucketMs, count := range tt.bucketCounts {
-				if bucket := storage.reqDurBuckets[bucketMs]; bucket != nil {
-					bucket.Store(count)
+				if idx, ok := storage.boundaryToIndex[bucketMs]; ok {
+					storage.reqDurBucketValues[idx].Store(count)
 				}
 			}
 
@@ -303,12 +303,12 @@ func TestMetricsExporter(t *testing.T) {
 			}
 
 			for bucketMs, expectedCount := range tt.expectedBuckets {
-				bucket := storage.reqDurBuckets[bucketMs]
-				if bucket == nil {
+				idx, ok := storage.boundaryToIndex[bucketMs]
+				if !ok {
 					t.Errorf("Bucket %dms not found in storage", bucketMs)
 					continue
 				}
-				actualCount := bucket.Load()
+				actualCount := storage.reqDurBucketValues[idx].Load()
 				if actualCount != expectedCount {
 					t.Errorf("Bucket %dms: expected %d, got %d", bucketMs, expectedCount, actualCount)
 				}
@@ -321,13 +321,13 @@ func BenchmarkPercentileCalculation(b *testing.B) {
 	storage := NewLocalTelemetryStorage()
 
 	storage.reqDurTotalCount.Store(10000)
-	storage.reqDurBuckets[5].Store(5000)
-	storage.reqDurBuckets[10].Store(2000)
-	storage.reqDurBuckets[25].Store(1500)
-	storage.reqDurBuckets[50].Store(800)
-	storage.reqDurBuckets[100].Store(400)
-	storage.reqDurBuckets[250].Store(200)
-	storage.reqDurBuckets[500].Store(100)
+	storage.reqDurBucketValues[storage.boundaryToIndex[5]].Store(5000)
+	storage.reqDurBucketValues[storage.boundaryToIndex[10]].Store(2000)
+	storage.reqDurBucketValues[storage.boundaryToIndex[25]].Store(1500)
+	storage.reqDurBucketValues[storage.boundaryToIndex[50]].Store(800)
+	storage.reqDurBucketValues[storage.boundaryToIndex[100]].Store(400)
+	storage.reqDurBucketValues[storage.boundaryToIndex[250]].Store(200)
+	storage.reqDurBucketValues[storage.boundaryToIndex[500]].Store(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = storage.calcPercentile(95)

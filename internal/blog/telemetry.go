@@ -43,7 +43,8 @@ type LocalTelemetryStorage struct {
 
 	spanChan              chan tracetest.SpanStub
 	reqFreqBound          []int
-	reqDurBuckets         map[int]*atomic.Int64
+	reqDurBucketValues    []*atomic.Int64
+	boundaryToIndex       map[int]int
 	servedCountPerArticle map[string]*atomic.Int64
 	reqBlockedByReason    map[string]*atomic.Int64
 	costHTML              []byte
@@ -52,16 +53,18 @@ type LocalTelemetryStorage struct {
 
 func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 	boundaries := []int{5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}
-	bcounts := make(map[int]*atomic.Int64, 15)
-	for _, bounds := range boundaries {
-		bcounts[bounds] = &atomic.Int64{}
-		bcounts[bounds].Store(0)
+	bucketValues := make([]*atomic.Int64, len(boundaries))
+	bIndex := make(map[int]int, len(boundaries))
+	for i, bounds := range boundaries {
+		bucketValues[i] = &atomic.Int64{}
+		bIndex[bounds] = i
 	}
 	return &LocalTelemetryStorage{
 		servedCountPerArticle: make(map[string]*atomic.Int64, 0),
 		reqBlockedByReason:    make(map[string]*atomic.Int64, 0),
 		spanChan:              make(chan tracetest.SpanStub, 10),
-		reqDurBuckets:         bcounts,
+		reqDurBucketValues:    bucketValues,
+		boundaryToIndex:       bIndex,
 		reqFreqBound:          boundaries,
 		costHTML:              []byte{},
 	}
@@ -133,13 +136,8 @@ func (lts *LocalTelemetryStorage) calcPercentile(percentile int64) (int64, error
 	var runningCount float64 = 0
 	previousBound := 0
 
-	for _, boundary := range lts.reqFreqBound {
-		bucket := lts.reqDurBuckets[boundary]
-		if bucket == nil {
-			continue
-		}
-
-		count := float64(bucket.Load())
+	for i, boundary := range lts.reqFreqBound {
+		count := float64(lts.reqDurBucketValues[i].Load())
 		runningCount += count
 
 		if runningCount >= targetCount {
