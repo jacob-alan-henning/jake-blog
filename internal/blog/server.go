@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -325,21 +326,18 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/*
-* NOTE: seperating the snippet creation from handler to make it easier to test
- */
-func (s *Server) makeMetricSnippet() *string {
-	var metricBuilder strings.Builder
-	metricBuilder.Grow(900)
+// writeMetricSnippet writes metrics HTML directly to w, avoiding intermediate allocations.
+// itoa is a stack-allocated scratch buffer reused across all integer conversions.
+func (s *Server) writeMetricSnippet(w io.Writer) {
+	var itoa [20]byte
 
-	uptime := time.Since(s.startTime)
-	metricBuilder.WriteString("<p>blog.uptime: ")
-	metricBuilder.WriteString(uptime.String())
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.uptime: ")
+	io.WriteString(w, time.Since(s.startTime).String())
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.articles.served: ") //%d</p>", s.lts.articlesServed.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.articlesServed.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.articles.served: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.articlesServed.Load(), 10))
+	io.WriteString(w, "</p>")
 	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
 	for art := range s.lts.servedCountPerArticle {
 		orderedKeys = append(orderedKeys, art)
@@ -348,19 +346,19 @@ func (s *Server) makeMetricSnippet() *string {
 	for _, aname := range orderedKeys {
 		counter, exists := s.lts.servedCountPerArticle[aname]
 		if exists {
-			metricBuilder.WriteString("<p>blog.articles.served.") //%s: %d</p>", aname, counter.Load()))
-			metricBuilder.WriteString(aname)
-			metricBuilder.WriteString(": ")
-			metricBuilder.WriteString(strconv.Itoa(int(counter.Load())))
-			metricBuilder.WriteString("</p>")
+			io.WriteString(w, "<p>blog.articles.served.")
+			io.WriteString(w, aname)
+			io.WriteString(w, ": ")
+			w.Write(strconv.AppendInt(itoa[:0], counter.Load(), 10))
+			io.WriteString(w, "</p>")
 		} else {
 			serverLogger.Warn().Msgf("could not load article freq metrics article does not exist in map %s", aname)
 		}
 	}
 
-	metricBuilder.WriteString("<p>blog.requests.blocked: ")
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqBlocked.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.requests.blocked: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqBlocked.Load(), 10))
+	io.WriteString(w, "</p>")
 	orderedReasons := make([]string, 0, len(s.lts.reqBlockedByReason))
 	for reason := range s.lts.reqBlockedByReason {
 		orderedReasons = append(orderedReasons, reason)
@@ -369,65 +367,59 @@ func (s *Server) makeMetricSnippet() *string {
 	for _, res := range orderedReasons {
 		counter, exists := s.lts.reqBlockedByReason[res]
 		if exists {
-			metricBuilder.WriteString("<p>blog.requests.blocked.")
-			metricBuilder.WriteString(res)
-			metricBuilder.WriteString(": ")
-			metricBuilder.WriteString(strconv.Itoa(int(counter.Load())))
-			metricBuilder.WriteString("</p>")
+			io.WriteString(w, "<p>blog.requests.blocked.")
+			io.WriteString(w, res)
+			io.WriteString(w, ": ")
+			w.Write(strconv.AppendInt(itoa[:0], counter.Load(), 10))
+			io.WriteString(w, "</p>")
 		}
 	}
 
-	metricBuilder.WriteString("<p>blog.requests.robots: ")
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.roboticVisitors.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.requests.robots: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.roboticVisitors.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.server.request.ms.p50: ") //%d</p>", s.lts.reqDur50.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur50.Load())))
-	metricBuilder.WriteString("</p>")
-	metricBuilder.WriteString("<p>blog.server.request.ms.p90: ") //%d</p>", s.lts.reqDur50.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur90.Load())))
-	metricBuilder.WriteString("</p>")
-	metricBuilder.WriteString("<p>blog.server.request.ms.p95: ") //%d</p>", s.lts.reqDur50.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur95.Load())))
-	metricBuilder.WriteString("</p>")
-	metricBuilder.WriteString("<p>blog.server.request.ms.p99: ") //%d</p>", s.lts.reqDur50.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.reqDur99.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.server.request.ms.p50: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur50.Load(), 10))
+	io.WriteString(w, "</p>")
+	io.WriteString(w, "<p>blog.server.request.ms.p90: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur90.Load(), 10))
+	io.WriteString(w, "</p>")
+	io.WriteString(w, "<p>blog.server.request.ms.p95: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur95.Load(), 10))
+	io.WriteString(w, "</p>")
+	io.WriteString(w, "<p>blog.server.request.ms.p99: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur99.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.goroutine.count: ") //%d</p>", s.lts.numGoRo.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.numGoRo.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.goroutine.count: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.numGoRo.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.heap.alloc.bytes: ") //%d</p>", s.lts.numGoRo.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.heapAlloc.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.heap.alloc.bytes: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.heapAlloc.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.stack.alloc.bytes: ") //%d</p>", s.lts.numGoRo.Load()))
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.stackAlloc.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.stack.alloc.bytes: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.stackAlloc.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.cost.update.success: ")
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.costUpdateSuccess.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.cost.update.success: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.costUpdateSuccess.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	metricBuilder.WriteString("<p>blog.cost.update.failure: ")
-	metricBuilder.WriteString(strconv.Itoa(int(s.lts.costUpdateFailure.Load())))
-	metricBuilder.WriteString("</p>")
+	io.WriteString(w, "<p>blog.cost.update.failure: ")
+	w.Write(strconv.AppendInt(itoa[:0], s.lts.costUpdateFailure.Load(), 10))
+	io.WriteString(w, "</p>")
 
-	buf := make([]byte, 0, 19)
-	buf = time.Now().AppendFormat(buf, "2006-01-02 15:04:05")
-	dtStr := string(buf)
-	metricBuilder.WriteString("<p>Last Updated: ")
-	metricBuilder.WriteString(dtStr)
-	metricBuilder.WriteString("</p>")
-	completed := metricBuilder.String()
-	return &completed
+	io.WriteString(w, "<p>Last Updated: ")
+	w.Write(time.Now().AppendFormat(itoa[:0], "2006-01-02 15:04:05"))
+	io.WriteString(w, "</p>")
 }
 
 func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	fmt.Fprint(w, *s.makeMetricSnippet())
+	s.writeMetricSnippet(w)
 }
 
 func (s *Server) CostSnippet(w http.ResponseWriter, r *http.Request) {
