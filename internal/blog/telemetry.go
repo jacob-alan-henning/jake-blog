@@ -443,7 +443,7 @@ func runtimeMetricLoop(ctx context.Context) {
 				telemLogger.Error().Msg("failed to export stack size")
 				stackAllocInt64 = math.MaxInt64
 			} else {
-				stackAllocInt64 = int64(stackAlloc)
+				stackAllocInt64 = int64(stackAlloc) // #nosec G115 -- bounds checked above
 			}
 
 			goStackAlloc.Record(ctx, stackAllocInt64)
@@ -452,7 +452,7 @@ func runtimeMetricLoop(ctx context.Context) {
 				telemLogger.Error().Msg("failed to export heap size")
 				heapAllocInt64 = math.MaxInt64
 			} else {
-				heapAllocInt64 = int64(heapAlloc)
+				heapAllocInt64 = int64(heapAlloc) // #nosec G115 -- bounds checked above
 			}
 
 			goHeapAlloc.Record(ctx, int64(heapAllocInt64))

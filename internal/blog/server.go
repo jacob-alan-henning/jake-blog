@@ -298,7 +298,7 @@ func (s *Server) Article(w http.ResponseWriter, r *http.Request) {
 	)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, err = w.Write(article.Content)
+	_, err = w.Write(article.Content) // #nosec G705 -- content is from our own git repo, not user input
 	if err != nil {
 		serverLogger.Error().Msgf("failed to send article to client: %v", err)
 		span.SetAttributes(attribute.String("error", "write failed"))
