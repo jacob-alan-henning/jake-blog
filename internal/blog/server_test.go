@@ -60,7 +60,7 @@ This is a test article's content.`
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		bs.server.writeMetricSnippet(io.Discard)
+		_ = bs.server.writeMetricSnippet(io.Discard)
 	}
 }
 

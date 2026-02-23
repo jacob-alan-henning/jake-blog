@@ -326,18 +326,39 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// errWriter wraps an io.Writer and tracks the first write error.
+// Subsequent writes are skipped once an error occurs.
+type errWriter struct {
+	w    io.Writer
+	itoa [20]byte
+	err  error
+}
+
+func (ew *errWriter) str(s string) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = io.WriteString(ew.w, s)
+}
+
+func (ew *errWriter) int64(v int64) {
+	if ew.err != nil {
+		return
+	}
+	_, ew.err = ew.w.Write(strconv.AppendInt(ew.itoa[:0], v, 10))
+}
+
 // writeMetricSnippet writes metrics HTML directly to w, avoiding intermediate allocations.
-// itoa is a stack-allocated scratch buffer reused across all integer conversions.
-func (s *Server) writeMetricSnippet(w io.Writer) {
-	var itoa [20]byte
+func (s *Server) writeMetricSnippet(w io.Writer) error {
+	ew := errWriter{w: w}
 
-	io.WriteString(w, "<p>blog.uptime: ")
-	io.WriteString(w, time.Since(s.startTime).String())
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.uptime: ")
+	ew.str(time.Since(s.startTime).String())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.articles.served: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.articlesServed.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.articles.served: ")
+	ew.int64(s.lts.articlesServed.Load())
+	ew.str("</p>")
 	orderedKeys := make([]string, 0, len(s.lts.servedCountPerArticle))
 	for art := range s.lts.servedCountPerArticle {
 		orderedKeys = append(orderedKeys, art)
@@ -346,19 +367,19 @@ func (s *Server) writeMetricSnippet(w io.Writer) {
 	for _, aname := range orderedKeys {
 		counter, exists := s.lts.servedCountPerArticle[aname]
 		if exists {
-			io.WriteString(w, "<p>blog.articles.served.")
-			io.WriteString(w, aname)
-			io.WriteString(w, ": ")
-			w.Write(strconv.AppendInt(itoa[:0], counter.Load(), 10))
-			io.WriteString(w, "</p>")
+			ew.str("<p>blog.articles.served.")
+			ew.str(aname)
+			ew.str(": ")
+			ew.int64(counter.Load())
+			ew.str("</p>")
 		} else {
 			serverLogger.Warn().Msgf("could not load article freq metrics article does not exist in map %s", aname)
 		}
 	}
 
-	io.WriteString(w, "<p>blog.requests.blocked: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqBlocked.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.requests.blocked: ")
+	ew.int64(s.lts.reqBlocked.Load())
+	ew.str("</p>")
 	orderedReasons := make([]string, 0, len(s.lts.reqBlockedByReason))
 	for reason := range s.lts.reqBlockedByReason {
 		orderedReasons = append(orderedReasons, reason)
@@ -367,59 +388,65 @@ func (s *Server) writeMetricSnippet(w io.Writer) {
 	for _, res := range orderedReasons {
 		counter, exists := s.lts.reqBlockedByReason[res]
 		if exists {
-			io.WriteString(w, "<p>blog.requests.blocked.")
-			io.WriteString(w, res)
-			io.WriteString(w, ": ")
-			w.Write(strconv.AppendInt(itoa[:0], counter.Load(), 10))
-			io.WriteString(w, "</p>")
+			ew.str("<p>blog.requests.blocked.")
+			ew.str(res)
+			ew.str(": ")
+			ew.int64(counter.Load())
+			ew.str("</p>")
 		}
 	}
 
-	io.WriteString(w, "<p>blog.requests.robots: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.roboticVisitors.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.requests.robots: ")
+	ew.int64(s.lts.roboticVisitors.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.server.request.ms.p50: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur50.Load(), 10))
-	io.WriteString(w, "</p>")
-	io.WriteString(w, "<p>blog.server.request.ms.p90: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur90.Load(), 10))
-	io.WriteString(w, "</p>")
-	io.WriteString(w, "<p>blog.server.request.ms.p95: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur95.Load(), 10))
-	io.WriteString(w, "</p>")
-	io.WriteString(w, "<p>blog.server.request.ms.p99: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.reqDur99.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.server.request.ms.p50: ")
+	ew.int64(s.lts.reqDur50.Load())
+	ew.str("</p>")
+	ew.str("<p>blog.server.request.ms.p90: ")
+	ew.int64(s.lts.reqDur90.Load())
+	ew.str("</p>")
+	ew.str("<p>blog.server.request.ms.p95: ")
+	ew.int64(s.lts.reqDur95.Load())
+	ew.str("</p>")
+	ew.str("<p>blog.server.request.ms.p99: ")
+	ew.int64(s.lts.reqDur99.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.goroutine.count: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.numGoRo.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.goroutine.count: ")
+	ew.int64(s.lts.numGoRo.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.heap.alloc.bytes: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.heapAlloc.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.heap.alloc.bytes: ")
+	ew.int64(s.lts.heapAlloc.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.stack.alloc.bytes: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.stackAlloc.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.stack.alloc.bytes: ")
+	ew.int64(s.lts.stackAlloc.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.cost.update.success: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.costUpdateSuccess.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.cost.update.success: ")
+	ew.int64(s.lts.costUpdateSuccess.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>blog.cost.update.failure: ")
-	w.Write(strconv.AppendInt(itoa[:0], s.lts.costUpdateFailure.Load(), 10))
-	io.WriteString(w, "</p>")
+	ew.str("<p>blog.cost.update.failure: ")
+	ew.int64(s.lts.costUpdateFailure.Load())
+	ew.str("</p>")
 
-	io.WriteString(w, "<p>Last Updated: ")
-	w.Write(time.Now().AppendFormat(itoa[:0], "2006-01-02 15:04:05"))
-	io.WriteString(w, "</p>")
+	if ew.err == nil {
+		ew.str("<p>Last Updated: ")
+		_, ew.err = ew.w.Write(time.Now().AppendFormat(ew.itoa[:0], "2006-01-02 15:04:05"))
+		ew.str("</p>")
+	}
+
+	return ew.err
 }
 
 func (s *Server) MetricSnippet(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	s.writeMetricSnippet(w)
+	if err := s.writeMetricSnippet(w); err != nil {
+		serverLogger.Error().Msgf("failed to write metric snippet: %v", err)
+	}
 }
 
 func (s *Server) CostSnippet(w http.ResponseWriter, r *http.Request) {
