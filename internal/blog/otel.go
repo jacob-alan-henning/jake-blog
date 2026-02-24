@@ -84,7 +84,7 @@ func (e *MetricsExporter) Export(_ context.Context, metrics *metricdata.Resource
 					for i, bval := range point.Bounds {
 						if i < len(point.BucketCounts) {
 							bvalMs := int(bval * 1000)
-							idx, ok := e.localTem.boundaryToIndex[bvalMs]
+							idx, ok := boundaryMsToIndex(bvalMs)
 							if ok {
 								e.localTem.reqDurBucketValues[idx].Store(safeUint64ToInt64(point.BucketCounts[i]))
 							} else {

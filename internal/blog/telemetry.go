@@ -70,6 +70,41 @@ func NewLocalTelemetryStorage() *LocalTelemetryStorage {
 	}
 }
 
+func boundaryMsToIndex(ms int) (int, bool) {
+	switch ms {
+	case 5:
+		return 0, true
+	case 10:
+		return 1, true
+	case 25:
+		return 2, true
+	case 50:
+		return 3, true
+	case 75:
+		return 4, true
+	case 100:
+		return 5, true
+	case 250:
+		return 6, true
+	case 500:
+		return 7, true
+	case 750:
+		return 8, true
+	case 1000:
+		return 9, true
+	case 2500:
+		return 10, true
+	case 5000:
+		return 11, true
+	case 7500:
+		return 12, true
+	case 10000:
+		return 13, true
+	default:
+		return -1, false
+	}
+}
+
 // have to do this because article names can change during process runtime
 func (lts *LocalTelemetryStorage) validateArticleAttr(artName string) {
 	_, found := lts.servedCountPerArticle[artName]

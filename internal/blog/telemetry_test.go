@@ -317,6 +317,8 @@ func TestMetricsExporter(t *testing.T) {
 	}
 }
 
+var percentileSink int64
+
 func BenchmarkPercentileCalculation(b *testing.B) {
 	storage := NewLocalTelemetryStorage()
 
@@ -330,15 +332,11 @@ func BenchmarkPercentileCalculation(b *testing.B) {
 	storage.reqDurBucketValues[storage.boundaryToIndex[500]].Store(100)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = storage.calcPercentile(95)
+		p50, p90, p95, p99 := storage.calcPercentiles()
+		percentileSink = p50 + p90 + p95 + p99
 	}
 }
 
-/*
-*
-* NOTE: creating a new goroutine in the exporter to calc percentiles is more than 2x slower
-* than calculating in the same goroutine
- */
 func BenchmarkMetricsExporter(b *testing.B) {
 	storage := NewLocalTelemetryStorage()
 	exporter := &MetricsExporter{localTem: storage}
@@ -368,12 +366,9 @@ func BenchmarkMetricsExporter(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		storage.reqDur99.Store(0)
-		_ = exporter.Export(context.Background(), metrics)
-		for {
-			if storage.reqDur99.Load() != 0 {
-				break
-			}
+		err := exporter.Export(context.Background(), metrics)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
 }
