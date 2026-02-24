@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -329,9 +328,9 @@ func (s *Server) LastTrace(w http.ResponseWriter, r *http.Request) {
 // errWriter wraps an io.Writer and tracks the first write error.
 // Subsequent writes are skipped once an error occurs.
 type errWriter struct {
-	w    io.Writer
-	itoa [20]byte
-	err  error
+	w   io.Writer
+	buf *[20]byte
+	err error
 }
 
 func (ew *errWriter) str(s string) {
@@ -345,12 +344,32 @@ func (ew *errWriter) int64(v int64) {
 	if ew.err != nil {
 		return
 	}
-	_, ew.err = ew.w.Write(strconv.AppendInt(ew.itoa[:0], v, 10))
+	n := 20
+	neg := v < 0
+	if neg {
+		v = -v
+	}
+	if v == 0 {
+		n--
+		ew.buf[n] = '0'
+	} else {
+		for v > 0 {
+			n--
+			ew.buf[n] = byte('0' + v%10)
+			v /= 10
+		}
+	}
+	if neg {
+		n--
+		ew.buf[n] = '-'
+	}
+	_, ew.err = ew.w.Write(ew.buf[n:])
 }
 
 // writeMetricSnippet writes metrics HTML directly to w, avoiding intermediate allocations.
 func (s *Server) writeMetricSnippet(w io.Writer) error {
-	ew := errWriter{w: w}
+	var buf [20]byte
+	ew := errWriter{w: w, buf: &buf}
 
 	ew.str("<p>blog.uptime: ")
 	uptimeDur := time.Since(s.startTime)
@@ -441,7 +460,7 @@ func (s *Server) writeMetricSnippet(w io.Writer) error {
 
 	if ew.err == nil {
 		ew.str("<p>Last Updated: ")
-		_, ew.err = ew.w.Write(time.Now().AppendFormat(ew.itoa[:0], "2006-01-02 15:04:05"))
+		_, ew.err = ew.w.Write(time.Now().AppendFormat(buf[:0], "2006-01-02 15:04:05"))
 		ew.str("</p>")
 	}
 
