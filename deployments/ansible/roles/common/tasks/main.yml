@@ -371,9 +371,9 @@
       ansible.builtin.template:
         src: templates/update.j2
         dest: /opt/jakeblog/update.sh
-        owner: jakeblog
-        group: certreaders
-        mode: '0755'
+        owner: root
+        group: root
+        mode: '0700'
       become: true
 
     - name: Set maintenance script on cron
