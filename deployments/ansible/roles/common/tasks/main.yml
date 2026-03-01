@@ -285,7 +285,7 @@
       ansible.builtin.file:
         path: /opt/jakeblog
         state: directory
-        owner: jakeblog
+        owner: root
         group: certreaders
         mode: '0750'
       become: true
@@ -300,18 +300,18 @@
       ansible.builtin.template:
         src: templates/compose.j2
         dest: /opt/jakeblog/compose.yml
-        owner: jakeblog
+        owner: root
         group: certreaders
-        mode: '0644'
+        mode: '0640'
       become: true
 
     - name: Create env file for compose
       ansible.builtin.template:
         src: templates/env.j2
         dest: /opt/jakeblog/.env
-        owner: jakeblog
+        owner: root
         group: certreaders
-        mode: '0600'
+        mode: '0640'
       become: true
 
     - name: Get ECR login token

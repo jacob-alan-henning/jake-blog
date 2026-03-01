@@ -1,3 +1,15 @@
+locals {
+  lightsail_dns_zone = "jake-henning.com"
+  fqdn               = trimsuffix(var.domain_name, ".")
+  zone_suffix        = ".${local.lightsail_dns_zone}"
+
+  # Lightsail record names are relative labels (or "@"),
+  # not full FQDNs.
+  record_name = local.fqdn == local.lightsail_dns_zone ? "@" : (
+    endswith(local.fqdn, local.zone_suffix) ? trimsuffix(local.fqdn, local.zone_suffix) : local.fqdn
+  )
+}
+
 resource "aws_lightsail_instance" "main" {
   name              = var.instance_name
   availability_zone = "${var.region}${var.availibility_zone}"
@@ -31,8 +43,8 @@ resource "aws_lightsail_instance_public_ports" "main" {
 }
 
 resource "aws_lightsail_domain_entry" "blog" {
-  domain_name = "jake-henning.com"
-  name        = var.domain_name
+  domain_name = local.lightsail_dns_zone
+  name        = local.record_name
   type        = "A"
   target      = aws_lightsail_static_ip.main.ip_address
 }

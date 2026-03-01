@@ -320,13 +320,22 @@ jobs:
     steps:
       - name: Smoke test
         run: |
-          RESPONSE=$(curl -sf https://jake-henning.com/content/)
-          SIZE=${#RESPONSE}
+          max_attempts=20
+          attempt=1
 
-          echo "Response size: ${SIZE} bytes"
+          while [ $attempt -le $max_attempts ]; do
+            RESPONSE=$(curl -sf https://jake-henning.com/content/ || true)
+            SIZE=${#RESPONSE}
 
-          if [ "$SIZE" -lt 512 ]; then
-            echo "Response too small, expected article listing"
-            echo "$RESPONSE"
-            exit 1
-          fi
+            if [ "$SIZE" -ge 512 ]; then
+              echo "Smoke test passed on attempt $attempt with response size ${SIZE} bytes"
+              exit 0
+            fi
+
+            echo "Attempt $attempt/$max_attempts failed (size=${SIZE}). Retrying in 15s..."
+            attempt=$((attempt+1))
+            sleep 15
+          done
+
+          echo "Smoke test failed after $max_attempts attempts"
+          exit 1

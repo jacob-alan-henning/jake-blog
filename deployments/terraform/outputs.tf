@@ -10,5 +10,5 @@ output "instance_arn" {
 
 output "dns_name" {
   description = "Full DNS name for the blog"
-  value       = "blog.${var.domain_name}"
+  value       = var.domain_name
 }
