@@ -7,6 +7,7 @@ Requires=docker.service
 Type=oneshot
 User=jakeblog
 Group=certreaders
+SupplementaryGroups=docker
 RemainAfterExit=yes
 WorkingDirectory=/opt/jakeblog
 ExecStart=/usr/bin/docker compose up -d

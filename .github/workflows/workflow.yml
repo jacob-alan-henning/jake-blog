@@ -250,7 +250,7 @@ jobs:
     needs: [provision]
     runs-on: ubuntu-latest
     permissions:
-      id-token: write 
+      id-token: write
       contents: read
 
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
@@ -258,7 +258,7 @@ jobs:
       run:
         working-directory: ./deployments/ansible
     steps:
-      - uses: actions/checkout@v4 
+      - uses: actions/checkout@v4
 
       - name: Setup Ansible
         uses: alex-oleshkevich/setup-ansible@v1.0.1
@@ -317,9 +317,16 @@ jobs:
 
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
-    steps: 
-      - name: "run smoke test"
-        run: curl -f https://jake-henning.com/content/
+    steps:
+      - name: Smoke test
+        run: |
+          RESPONSE=$(curl -sf https://jake-henning.com/content/)
+          SIZE=${#RESPONSE}
 
+          echo "Response size: ${SIZE} bytes"
 
-
+          if [ "$SIZE" -lt 512 ]; then
+            echo "Response too small, expected article listing"
+            echo "$RESPONSE"
+            exit 1
+          fi

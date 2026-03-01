@@ -11,4 +11,7 @@ services:
       driver: "journald"
       options:
         tag: "jakeblog-app"
-
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE

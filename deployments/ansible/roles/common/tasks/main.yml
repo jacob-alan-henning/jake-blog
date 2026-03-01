@@ -290,11 +290,10 @@
         mode: '0750'
       become: true
 
-    - name: Add jakeblog user to the docker group
+    - name: Ensure jakeblog has no supplementary group membership
       ansible.builtin.user:
         name: jakeblog
-        groups: docker
-        append: true
+        groups: ""
       become: true
 
     - name: Copy docker compose file
