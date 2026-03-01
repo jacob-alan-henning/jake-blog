@@ -3,9 +3,8 @@ locals {
   fqdn               = trimsuffix(var.domain_name, ".")
   zone_suffix        = ".${local.lightsail_dns_zone}"
 
-  # Lightsail record names are relative labels (or "@"),
-  # not full FQDNs.
-  record_name = local.fqdn == local.lightsail_dns_zone ? "@" : (
+  # Lightsail API expects apex records to use the zone name itself.
+  record_name = local.fqdn == local.lightsail_dns_zone ? local.lightsail_dns_zone : (
     endswith(local.fqdn, local.zone_suffix) ? trimsuffix(local.fqdn, local.zone_suffix) : local.fqdn
   )
 }
